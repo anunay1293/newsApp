@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.Button
 import androidx.compose.foundation.lazy.LazyColumn
@@ -89,7 +90,9 @@ fun HomeScreen(
                 modifier = Modifier.wrapContentSize(Alignment.TopEnd)
             ) {
                 Button(
-                    onClick = { isDropdownExpanded = !isDropdownExpanded }
+                    onClick = { 
+                        isDropdownExpanded = !isDropdownExpanded 
+                    }
                 ) {
                     Text(
                         text = "${uiState.selectedCategory.replaceFirstChar { it.uppercase() }} ▼",
@@ -98,18 +101,20 @@ fun HomeScreen(
                 }
                 DropdownMenu(
                     expanded = isDropdownExpanded,
-                    onDismissRequest = { isDropdownExpanded = false }
+                    onDismissRequest = { isDropdownExpanded = false },
+                    modifier = Modifier.widthIn(min = 180.dp)
                 ) {
                     NEWS_CATEGORIES.forEach { category ->
                         DropdownMenuItem(
                             text = { 
                                 Text(
-                                    text = category.replaceFirstChar { it.uppercase() }
+                                    text = category.replaceFirstChar { it.uppercase() },
+                                    modifier = Modifier.fillMaxWidth()
                                 ) 
                             },
                             onClick = {
-                                viewModel.handleEvent(HomeUiEvent.OnCategorySelected(category))
                                 isDropdownExpanded = false
+                                viewModel.handleEvent(HomeUiEvent.OnCategorySelected(category))
                             }
                         )
                     }
