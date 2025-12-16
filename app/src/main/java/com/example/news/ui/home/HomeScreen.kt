@@ -19,12 +19,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,10 +35,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.news.presentation.home.HomeUiEvent
+import com.example.news.presentation.home.HomeViewModel
 import com.example.news.ui.model.ArticleUiModel
 import com.example.news.ui.theme.NewsTheme
 import java.text.SimpleDateFormat
@@ -56,16 +61,13 @@ private val NEWS_CATEGORIES = listOf(
 
 /**
  * Main screen displaying news articles with category filter.
- * TODO: Connect to ViewModel to handle state and events.
- * TODO: Replace fake data with real data from repository.
  */
 @Composable
-fun HomeScreen() {
-    var selectedCategory by remember { mutableStateOf("general") }
+fun HomeScreen(
+    viewModel: HomeViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
     var isDropdownExpanded by remember { mutableStateOf(false) }
-    
-    // TODO: Replace with ViewModel state
-    val articles = remember { FakeDataProvider.getFakeArticles() }
     
     Column(
         modifier = Modifier
@@ -90,7 +92,7 @@ fun HomeScreen() {
                     onClick = { isDropdownExpanded = !isDropdownExpanded }
                 ) {
                     Text(
-                        text = "${selectedCategory.replaceFirstChar { it.uppercase() }} ▼",
+                        text = "${uiState.selectedCategory.replaceFirstChar { it.uppercase() }} ▼",
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -106,9 +108,8 @@ fun HomeScreen() {
                                 ) 
                             },
                             onClick = {
-                                selectedCategory = category
+                                viewModel.handleEvent(HomeUiEvent.OnCategorySelected(category))
                                 isDropdownExpanded = false
-                                // TODO: Notify ViewModel of category change
                             }
                         )
                     }
@@ -118,13 +119,72 @@ fun HomeScreen() {
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Article list
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 8.dp)
-        ) {
-            items(articles) { article ->
-                ArticleCard(article = article)
+        // Content based on state
+        when {
+            uiState.isLoading -> {
+                // Loading indicator
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            uiState.errorMessage != null -> {
+                // Error state with retry button
+                val errorMessage = uiState.errorMessage ?: ""
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = errorMessage,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        Button(
+                            onClick = { viewModel.handleEvent(HomeUiEvent.OnRetryClicked) }
+                        ) {
+                            Text(text = "Retry")
+                        }
+                    }
+                }
+            }
+            else -> {
+                // Article list
+                if (uiState.articles.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No articles available",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        items(uiState.articles) { article ->
+                            ArticleCard(article = article)
+                        }
+                    }
+                }
             }
         }
     }
