@@ -1,17 +1,16 @@
 package com.example.news.data.api
 
-import com.example.news.data.dto.TopHeadlinesResponseDto
+import com.example.news.data.dto.FeedResponseDto
 import retrofit2.http.GET
 import retrofit2.http.Query
 
 /**
- * Retrofit service interface for NewsAPI.
+ * Retrofit service interface for AWS API Gateway news feed endpoint.
  */
 interface NewsApiService {
-    @GET("v2/top-headlines")
-    suspend fun getTopHeadlines(
-        @Query("category") category: String,
-        @Query("language") language: String = "en"
-    ): TopHeadlinesResponseDto
+    @GET("feed")
+    suspend fun getFeed(
+        @Query("category") category: String
+    ): FeedResponseDto
 }
 

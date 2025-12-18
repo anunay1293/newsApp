@@ -1,7 +1,6 @@
 package com.example.news.data.api
 
 import com.example.news.BuildConfig
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -10,19 +9,11 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Provides Retrofit instance and NewsApiService.
- * Sets up OkHttp with API key interceptor and logging (debug only).
+ * Sets up OkHttp with logging (debug only).
+ * AWS API Gateway endpoint is public and doesn't require API key.
  */
 object NewsApiModule {
-    private const val BASE_URL = "https://newsapi.org/"
-    private const val API_KEY_HEADER = "X-Api-Key"
-    
-    private val apiKeyInterceptor = Interceptor { chain ->
-        val original = chain.request()
-        val requestBuilder = original.newBuilder()
-            .header(API_KEY_HEADER, BuildConfig.NEWS_API_KEY)
-        val request = requestBuilder.build()
-        chain.proceed(request)
-    }
+    private const val BASE_URL = "https://eqzdxpsxvf.execute-api.us-east-1.amazonaws.com/prod/"
     
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = if (BuildConfig.DEBUG) {
@@ -33,7 +24,6 @@ object NewsApiModule {
     }
     
     private val okHttpClient = OkHttpClient.Builder()
-        .addInterceptor(apiKeyInterceptor)
         .addInterceptor(loggingInterceptor)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
