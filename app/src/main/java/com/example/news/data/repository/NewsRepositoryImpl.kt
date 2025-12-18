@@ -6,7 +6,7 @@ import com.example.news.ui.model.ArticleUiModel
 
 /**
  * Implementation of NewsRepository.
- * Fetches articles from NewsAPI and maps them to UI models.
+ * Fetches articles from AWS API Gateway and maps them to UI models.
  */
 class NewsRepositoryImpl(
     private val newsApiService: com.example.news.data.api.NewsApiService = NewsApiModule.newsApiService
@@ -14,7 +14,7 @@ class NewsRepositoryImpl(
     
     override suspend fun fetchTopHeadlinesByCategory(category: String): List<ArticleUiModel> {
         return try {
-            val response = newsApiService.getTopHeadlines(category = category, language = "en")
+            val response = newsApiService.getFeed(category = category)
             response.articles?.mapNotNull { articleDto ->
                 articleDto.toUiModel()
             } ?: emptyList()
