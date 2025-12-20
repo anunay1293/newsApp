@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.news.data.repository.NewsRepository
 import com.example.news.data.repository.NewsRepositoryImpl
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +28,12 @@ class HomeViewModel(
     
     private var currentCategory = "general"
     
+    // Track the observation job to cancel it when switching categories
+    private var observationJob: Job? = null
+    
+    // Track the refresh job to cancel it when switching categories
+    private var refreshJob: Job? = null
+    
     init {
         // Start observing default category on init
         observeCategory("general")
@@ -48,6 +55,12 @@ class HomeViewModel(
      * Also triggers background refresh.
      */
     private fun observeCategory(category: String) {
+        // Cancel previous observation job to prevent multiple Flow collections
+        observationJob?.cancel()
+        
+        // Cancel previous refresh job to prevent stale updates
+        refreshJob?.cancel()
+        
         currentCategory = category
         
         // Update selected category immediately
@@ -58,21 +71,28 @@ class HomeViewModel(
         )
         
         // Observe Room Flow - this is the single source of truth
-        repository.observeArticles(category)
+        // Store the job so we can cancel it when switching categories
+        observationJob = repository.observeArticles(category)
             .catch { e ->
                 // Handle Flow errors
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = e.message ?: "Failed to load articles",
-                    isRefreshing = false
-                )
+                // Only update error if this is still the current category
+                if (currentCategory == category) {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = e.message ?: "Failed to load articles",
+                        isRefreshing = false
+                    )
+                }
             }
             .onEach { articles ->
                 // Update UI state from Room
-                _uiState.value = _uiState.value.copy(
-                    articles = articles,
-                    isRefreshing = false,
-                    errorMessage = null
-                )
+                // Only update if this is still the current category to prevent race conditions
+                if (currentCategory == category) {
+                    _uiState.value = _uiState.value.copy(
+                        articles = articles,
+                        isRefreshing = false,
+                        errorMessage = null
+                    )
+                }
             }
             .launchIn(viewModelScope)
         
@@ -92,11 +112,15 @@ class HomeViewModel(
      * Runs in background and updates Room, which automatically notifies Flow observers.
      */
     private fun refreshCategory(category: String) {
-        viewModelScope.launch {
+        // Cancel previous refresh job
+        refreshJob?.cancel()
+        
+        // Store the refresh job so we can cancel it if needed
+        refreshJob = viewModelScope.launch {
             try {
-                // Set refreshing state only if we have cached data
+                // Set refreshing state only if we have cached data and this is still the current category
                 // If no cached data, loading will be handled by empty state
-                if (_uiState.value.articles.isNotEmpty()) {
+                if (currentCategory == category && _uiState.value.articles.isNotEmpty()) {
                     _uiState.value = _uiState.value.copy(isRefreshing = true)
                 }
                 
@@ -108,10 +132,13 @@ class HomeViewModel(
             } catch (e: Exception) {
                 // This shouldn't happen as repository doesn't throw on refresh error
                 // But handle it just in case
-                _uiState.value = _uiState.value.copy(
-                    isRefreshing = false,
-                    errorMessage = e.message ?: "Failed to refresh articles"
-                )
+                // Only update error if this is still the current category
+                if (currentCategory == category) {
+                    _uiState.value = _uiState.value.copy(
+                        isRefreshing = false,
+                        errorMessage = e.message ?: "Failed to refresh articles"
+                    )
+                }
             }
         }
     }

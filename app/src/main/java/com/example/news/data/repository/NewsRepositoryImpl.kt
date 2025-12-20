@@ -35,14 +35,21 @@ class NewsRepositoryImpl(
             val articles = response.articles ?: emptyList()
             
             // Convert DTOs to entities and upsert to Room
+            // Important: Each entity is tagged with the correct category from the API response
             val entities = articles.map { articleDto ->
                 articleDto.toEntity(category = category)
             }
             
+            // Upsert articles first
             articleDao.upsertArticles(entities)
             
             // Clean up old articles (keep only most recent 100 per category)
-            articleDao.deleteOldArticles(category, keepLimit = 100)
+            // Use a reliable two-step approach: get IDs to keep, then delete the rest
+            // This is more reliable than using LIMIT in a subquery
+            val articleIdsToKeep = articleDao.getArticleIdsToKeep(category, keepLimit = 100)
+            if (articleIdsToKeep.isNotEmpty()) {
+                articleDao.deleteOldArticlesByExclusion(category, articleIdsToKeep)
+            }
             
         } catch (e: Exception) {
             // On error, don't throw exception - cached data remains available

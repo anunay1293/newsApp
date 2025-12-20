@@ -25,19 +25,26 @@ interface ArticleDao {
     suspend fun upsertArticles(articles: List<ArticleEntity>)
     
     /**
-     * Delete old articles for a category, keeping only the most recent N items.
-     * Keeps the database size manageable by retaining only the latest articles per category.
+     * Get article IDs to keep for a category (most recent N items).
+     * Used internally by deleteOldArticles for reliable cleanup.
+     */
+    @Query("""
+        SELECT articleId FROM articles 
+        WHERE category = :category 
+        ORDER BY publishedAt DESC 
+        LIMIT :keepLimit
+    """)
+    suspend fun getArticleIdsToKeep(category: String, keepLimit: Int): List<String>
+    
+    /**
+     * Delete old articles for a category, excluding the provided article IDs.
+     * More reliable than subquery with LIMIT in SQLite.
      */
     @Query("""
         DELETE FROM articles 
         WHERE category = :category 
-        AND articleId NOT IN (
-            SELECT articleId FROM articles 
-            WHERE category = :category 
-            ORDER BY publishedAt DESC 
-            LIMIT :keepLimit
-        )
+        AND articleId NOT IN (:articleIdsToKeep)
     """)
-    suspend fun deleteOldArticles(category: String, keepLimit: Int)
+    suspend fun deleteOldArticlesByExclusion(category: String, articleIdsToKeep: List<String>)
 }
 
