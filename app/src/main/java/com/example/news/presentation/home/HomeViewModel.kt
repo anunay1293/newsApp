@@ -3,21 +3,27 @@ package com.example.news.presentation.home
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import com.example.news.data.repository.NewsRepository
 import com.example.news.data.repository.NewsRepositoryImpl
-import kotlinx.coroutines.Job
+import com.example.news.ui.model.ArticleUiModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
  * ViewModel for HomeScreen.
- * Implements SSOT pattern: observes Room Flow for articles, refreshes network in background.
+ * Implements SSOT pattern: observes Room PagingData for articles, refreshes network in background.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
     application: Application,
     private val repository: NewsRepository = NewsRepositoryImpl(application.applicationContext)
@@ -26,10 +32,20 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
     
-    private var currentCategory = "general"
+    /**
+     * Get paged articles for current category.
+     * This Flow is reactive to category changes via selectedCategory StateFlow.
+     * Cached in ViewModelScope for configuration changes.
+     */
+    val pagedArticles: Flow<PagingData<ArticleUiModel>> = _uiState
+        .map { it.selectedCategory }
+        .distinctUntilChanged()
+        .flatMapLatest { category ->
+            repository.getPagedArticles(category)
+                .cachedIn(viewModelScope)
+        }
     
-    // Track the observation job to cancel it when switching categories
-    private var observationJob: Job? = null
+    private var currentCategory = "general"
     
     // Track the refresh job to cancel it when switching categories
     private var refreshJob: Job? = null
@@ -53,48 +69,21 @@ class HomeViewModel(
     /**
      * Observes articles for a category from Room (SSOT).
      * Also triggers background refresh.
+     * The pagedArticles Flow will automatically update when selectedCategory changes.
      */
     private fun observeCategory(category: String) {
-        // Cancel previous observation job to prevent multiple Flow collections
-        observationJob?.cancel()
-        
         // Cancel previous refresh job to prevent stale updates
         refreshJob?.cancel()
         
         currentCategory = category
         
         // Update selected category immediately
+        // This will trigger pagedArticles Flow to switch to the new category
         _uiState.value = _uiState.value.copy(
             selectedCategory = category,
             isRefreshing = false,
             errorMessage = null
         )
-        
-        // Observe Room Flow - this is the single source of truth
-        // Store the job so we can cancel it when switching categories
-        observationJob = repository.observeArticles(category)
-            .catch { e ->
-                // Handle Flow errors
-                // Only update error if this is still the current category
-                if (currentCategory == category) {
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = e.message ?: "Failed to load articles",
-                        isRefreshing = false
-                    )
-                }
-            }
-            .onEach { articles ->
-                // Update UI state from Room
-                // Only update if this is still the current category to prevent race conditions
-                if (currentCategory == category) {
-                    _uiState.value = _uiState.value.copy(
-                        articles = articles,
-                        isRefreshing = false,
-                        errorMessage = null
-                    )
-                }
-            }
-            .launchIn(viewModelScope)
         
         // Refresh from network in background (doesn't block UI)
         refreshCategory(category)
@@ -109,7 +98,7 @@ class HomeViewModel(
     
     /**
      * Refreshes articles for a category from network.
-     * Runs in background and updates Room, which automatically notifies Flow observers.
+     * Runs in background and updates Room, which automatically notifies PagingData observers.
      */
     private fun refreshCategory(category: String) {
         // Cancel previous refresh job
@@ -118,16 +107,15 @@ class HomeViewModel(
         // Store the refresh job so we can cancel it if needed
         refreshJob = viewModelScope.launch {
             try {
-                // Set refreshing state only if we have cached data and this is still the current category
-                // If no cached data, loading will be handled by empty state
-                if (currentCategory == category && _uiState.value.articles.isNotEmpty()) {
+                // Set refreshing state (non-blocking indicator)
+                if (currentCategory == category) {
                     _uiState.value = _uiState.value.copy(isRefreshing = true)
                 }
                 
                 repository.refreshArticles(category)
                 
-                // Refreshing will be turned off when Flow emits new data
-                // If error occurred, cached data remains visible (repository doesn't throw)
+                // Refreshing will be turned off after a short delay or when PagingData updates
+                // Room updates will automatically trigger PagingSource invalidation
                 
             } catch (e: Exception) {
                 // This shouldn't happen as repository doesn't throw on refresh error
@@ -138,6 +126,11 @@ class HomeViewModel(
                         isRefreshing = false,
                         errorMessage = e.message ?: "Failed to refresh articles"
                     )
+                }
+            } finally {
+                // Turn off refreshing indicator after refresh completes
+                if (currentCategory == category) {
+                    _uiState.value = _uiState.value.copy(isRefreshing = false)
                 }
             }
         }

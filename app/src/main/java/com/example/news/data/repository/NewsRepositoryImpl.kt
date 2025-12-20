@@ -1,6 +1,10 @@
 package com.example.news.data.repository
 
 import android.content.Context
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.map
 import com.example.news.data.api.NewsApiModule
 import com.example.news.data.local.NewsDatabase
 import com.example.news.data.mapper.toEntity
@@ -11,7 +15,7 @@ import kotlinx.coroutines.flow.map
 
 /**
  * Implementation of NewsRepository with Single Source of Truth (SSOT) pattern.
- * UI always reads from Room database.
+ * UI always reads from Room database via Paging 3.
  * Network is only used to refresh Room in background.
  */
 class NewsRepositoryImpl(
@@ -22,10 +26,21 @@ class NewsRepositoryImpl(
     private val database = NewsDatabase.getDatabase(context)
     private val articleDao = database.articleDao()
     
-    override fun observeArticles(category: String): Flow<List<ArticleUiModel>> {
-        // Observe from Room - this is the single source of truth
-        return articleDao.observeArticlesByCategory(category)
-            .map { entities -> entities.map { it.toUiModel() } }
+    override fun getPagedArticles(category: String): Flow<PagingData<ArticleUiModel>> {
+        // Get PagingSource from Room and map entities to UI models
+        // Room's PagingSource handles pagination automatically
+        val pagingSourceFactory = { articleDao.getPagedArticlesByCategory(category) }
+        
+        return Pager(
+            config = PagingConfig(
+                pageSize = 20,
+                enablePlaceholders = false,
+                prefetchDistance = 10
+            ),
+            pagingSourceFactory = pagingSourceFactory
+        ).flow.map { pagingData -> 
+            pagingData.map { entity -> entity.toUiModel() }
+        }
     }
     
     override suspend fun refreshArticles(category: String) {

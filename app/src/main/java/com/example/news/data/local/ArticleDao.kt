@@ -1,5 +1,6 @@
 package com.example.news.data.local
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -12,8 +13,16 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ArticleDao {
     /**
+     * Get paged articles for a specific category, ordered by publishedAt descending (newest first).
+     * Used by Paging 3 for efficient pagination.
+     */
+    @Query("SELECT * FROM articles WHERE category = :category ORDER BY publishedAt DESC")
+    fun getPagedArticlesByCategory(category: String): PagingSource<Int, ArticleEntity>
+    
+    /**
      * Observe articles for a specific category, ordered by publishedAt descending (newest first).
      * This is the single source of truth for UI.
+     * @deprecated Use getPagedArticlesByCategory with Paging 3 instead.
      */
     @Query("SELECT * FROM articles WHERE category = :category ORDER BY publishedAt DESC")
     fun observeArticlesByCategory(category: String): Flow<List<ArticleEntity>>
