@@ -44,6 +44,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.ViewModelProvider
 import android.app.Application
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import com.example.news.presentation.home.HomeUiEvent
 import com.example.news.presentation.home.HomeViewModel
@@ -78,6 +82,7 @@ fun HomeScreen() {
         }
     )
     val uiState by viewModel.uiState.collectAsState()
+    val pagedArticles = viewModel.pagedArticles.collectAsLazyPagingItems()
     var isDropdownExpanded by remember { mutableStateOf(false) }
     
     Column(
@@ -129,79 +134,111 @@ fun HomeScreen() {
         Spacer(modifier = Modifier.height(16.dp))
         
         // Content based on state
-        // Show cached articles immediately (SSOT pattern)
-        // Only show loading if no cached data exists
-        if (uiState.articles.isEmpty() && uiState.errorMessage == null) {
-            // Initial loading state (no cached data)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        } else if (uiState.errorMessage != null && uiState.articles.isEmpty()) {
-            // Error state with retry button (only show if no cached data)
-            val errorMessage = uiState.errorMessage ?: ""
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = errorMessage,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    Button(
-                        onClick = { viewModel.handleEvent(HomeUiEvent.OnRetryClicked) }
-                    ) {
-                        Text(text = "Retry")
-                    }
-                }
-            }
-        } else {
-            // Show articles (cached data is available)
-            if (uiState.articles.isEmpty()) {
+        // Paging 3 handles loading states automatically
+        Box(modifier = Modifier.weight(1f)) {
+            // Show error state if there's an error and no items loaded
+            if (uiState.errorMessage != null && pagedArticles.itemCount == 0) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "No articles available",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = uiState.errorMessage ?: "Unknown error",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        Button(
+                            onClick = { viewModel.handleEvent(HomeUiEvent.OnRetryClicked) }
+                        ) {
+                            Text(text = "Retry")
+                        }
+                    }
                 }
             } else {
-                Box(modifier = Modifier.weight(1f)) {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(vertical = 8.dp)
-                    ) {
-                        items(uiState.articles) { article ->
+                // Article list with Paging 3
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    items(
+                        count = pagedArticles.itemCount,
+                        key = pagedArticles.itemKey { it.id }
+                    ) { index ->
+                        val article = pagedArticles[index]
+                        if (article != null) {
                             ArticleCard(article = article)
                         }
                     }
                     
-                    // Show refreshing indicator if refreshing (non-blocking)
-                    if (uiState.isRefreshing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 8.dp)
-                        )
+                    // Show loading indicator at the bottom when loading more
+                    if (pagedArticles.loadState.append is LoadState.Loading) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
                     }
+                    
+                    // Show error state at the bottom if loading more fails
+                    if (pagedArticles.loadState.append is LoadState.Error) {
+                        item {
+                            val error = (pagedArticles.loadState.append as LoadState.Error).error
+                            Text(
+                                text = "Error loading more: ${error.message}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    }
+                    
+                    // Show empty state if no items
+                    if (pagedArticles.loadState.refresh is LoadState.NotLoading &&
+                        pagedArticles.itemCount == 0
+                    ) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No articles available",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                // Show initial loading indicator
+                if (pagedArticles.loadState.refresh is LoadState.Loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                    )
+                }
+                
+                // Show refreshing indicator at top if refreshing (non-blocking)
+                if (uiState.isRefreshing && pagedArticles.itemCount > 0) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 8.dp)
+                    )
                 }
             }
         }
@@ -290,4 +327,5 @@ private fun HomeScreenPreview() {
         HomeScreen()
     }
 }
+
 
