@@ -7,7 +7,7 @@ import com.example.news.ui.model.ArticleUiModel
  */
 data class HomeUiState(
     val selectedCategory: String = "general",
-    val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val articles: List<ArticleUiModel> = emptyList(),
     val errorMessage: String? = null
 )

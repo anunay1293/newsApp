@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.Button
@@ -41,6 +42,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
+import android.app.Application
 import coil.compose.AsyncImage
 import com.example.news.presentation.home.HomeUiEvent
 import com.example.news.presentation.home.HomeViewModel
@@ -64,9 +67,16 @@ private val NEWS_CATEGORIES = listOf(
  * Main screen displaying news articles with category filter.
  */
 @Composable
-fun HomeScreen(
-    viewModel: HomeViewModel = viewModel()
-) {
+fun HomeScreen() {
+    val application = LocalContext.current.applicationContext as Application
+    val viewModel: HomeViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return HomeViewModel(application) as T
+            }
+        }
+    )
     val uiState by viewModel.uiState.collectAsState()
     var isDropdownExpanded by remember { mutableStateOf(false) }
     
@@ -86,13 +96,9 @@ fun HomeScreen(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(end = 8.dp)
             )
-            Box(
-                modifier = Modifier.wrapContentSize(Alignment.TopEnd)
-            ) {
+            Box {
                 Button(
-                    onClick = { 
-                        isDropdownExpanded = !isDropdownExpanded 
-                    }
+                    onClick = { isDropdownExpanded = !isDropdownExpanded }
                 ) {
                     Text(
                         text = "${uiState.selectedCategory.replaceFirstChar { it.uppercase() }} ▼",
@@ -101,20 +107,18 @@ fun HomeScreen(
                 }
                 DropdownMenu(
                     expanded = isDropdownExpanded,
-                    onDismissRequest = { isDropdownExpanded = false },
-                    modifier = Modifier.widthIn(min = 180.dp)
+                    onDismissRequest = { isDropdownExpanded = false }
                 ) {
                     NEWS_CATEGORIES.forEach { category ->
                         DropdownMenuItem(
                             text = { 
                                 Text(
-                                    text = category.replaceFirstChar { it.uppercase() },
-                                    modifier = Modifier.fillMaxWidth()
+                                    text = category.replaceFirstChar { it.uppercase() }
                                 ) 
                             },
                             onClick = {
-                                isDropdownExpanded = false
                                 viewModel.handleEvent(HomeUiEvent.OnCategorySelected(category))
+                                isDropdownExpanded = false
                             }
                         )
                     }
@@ -125,62 +129,62 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         
         // Content based on state
-        when {
-            uiState.isLoading -> {
-                // Loading indicator
+        // Show cached articles immediately (SSOT pattern)
+        // Only show loading if no cached data exists
+        if (uiState.articles.isEmpty() && uiState.errorMessage == null) {
+            // Initial loading state (no cached data)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else if (uiState.errorMessage != null && uiState.articles.isEmpty()) {
+            // Error state with retry button (only show if no cached data)
+            val errorMessage = uiState.errorMessage ?: ""
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    Button(
+                        onClick = { viewModel.handleEvent(HomeUiEvent.OnRetryClicked) }
+                    ) {
+                        Text(text = "Retry")
+                    }
+                }
+            }
+        } else {
+            // Show articles (cached data is available)
+            if (uiState.articles.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    Text(
+                        text = "No articles available",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-            }
-            uiState.errorMessage != null -> {
-                // Error state with retry button
-                val errorMessage = uiState.errorMessage ?: ""
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = errorMessage,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-                        Button(
-                            onClick = { viewModel.handleEvent(HomeUiEvent.OnRetryClicked) }
-                        ) {
-                            Text(text = "Retry")
-                        }
-                    }
-                }
-            }
-            else -> {
-                // Article list
-                if (uiState.articles.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No articles available",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
+            } else {
+                Box(modifier = Modifier.weight(1f)) {
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(vertical = 8.dp)
@@ -188,6 +192,15 @@ fun HomeScreen(
                         items(uiState.articles) { article ->
                             ArticleCard(article = article)
                         }
+                    }
+                    
+                    // Show refreshing indicator if refreshing (non-blocking)
+                    if (uiState.isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 8.dp)
+                        )
                     }
                 }
             }
