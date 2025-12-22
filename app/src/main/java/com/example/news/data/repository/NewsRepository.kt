@@ -13,10 +13,11 @@ import kotlinx.coroutines.flow.Flow
 interface NewsRepository {
     /**
      * Get paged articles for a category from Room database.
+     * Optionally filters by search query (searches in title, author, and sourceName).
      * This is the single source of truth for UI.
      * Returns PagingData for efficient pagination.
      */
-    fun getPagedArticles(category: String): Flow<PagingData<ArticleUiModel>>
+    fun getPagedArticles(category: String, searchQuery: String = ""): Flow<PagingData<ArticleUiModel>>
     
     /**
      * Refresh articles for a category from network and update Room.
@@ -24,4 +25,15 @@ interface NewsRepository {
      * On error, cached data remains available (no exception thrown).
      */
     suspend fun refreshArticles(category: String)
+    
+    /**
+     * Toggle bookmark state for an article.
+     * If bookmarked, removes bookmark. If not bookmarked, adds bookmark.
+     */
+    suspend fun toggleBookmark(articleId: String)
+    
+    /**
+     * Get all bookmarked articles as PagingData.
+     */
+    fun getPagedBookmarkedArticles(): Flow<PagingData<ArticleUiModel>>
 }
