@@ -83,6 +83,10 @@ dependencies {
     // Navigation Compose
     implementation(libs.navigation.compose)
 
+    // AWS Amplify
+    implementation(libs.amplify.core)
+    implementation(libs.amplify.auth.cognito)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
