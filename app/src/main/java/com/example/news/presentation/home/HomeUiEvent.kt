@@ -5,6 +5,8 @@ package com.example.news.presentation.home
  */
 sealed class HomeUiEvent {
     data class OnCategorySelected(val category: String) : HomeUiEvent()
+    data class OnSearchQueryChanged(val searchQuery: String) : HomeUiEvent()
+    data class OnBookmarkToggle(val articleId: String) : HomeUiEvent()
     object OnRetryClicked : HomeUiEvent()
 }
 

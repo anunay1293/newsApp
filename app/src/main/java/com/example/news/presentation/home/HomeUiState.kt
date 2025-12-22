@@ -6,6 +6,7 @@ package com.example.news.presentation.home
  */
 data class HomeUiState(
     val selectedCategory: String = "general",
+    val searchQuery: String = "",
     val isRefreshing: Boolean = false,
     val errorMessage: String? = null
 )

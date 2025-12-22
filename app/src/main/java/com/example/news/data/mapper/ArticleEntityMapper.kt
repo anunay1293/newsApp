@@ -28,8 +28,9 @@ fun ArticleDto.toEntity(category: String): ArticleEntity {
 
 /**
  * Maps ArticleEntity (from Room) to ArticleUiModel (for UI).
+ * @param isBookmarked whether this article is currently bookmarked
  */
-fun ArticleEntity.toUiModel(): ArticleUiModel {
+fun ArticleEntity.toUiModel(isBookmarked: Boolean = false): ArticleUiModel {
     // Parse published date (ISO 8601 format)
     val publishedDate = parsePublishedDate(publishedAt)
     
@@ -39,7 +40,8 @@ fun ArticleEntity.toUiModel(): ArticleUiModel {
         author = author.takeIf { it.isNotBlank() } ?: "Unknown",
         publishedDate = publishedDate,
         imageUrl = urlToImage?.takeIf { it.isNotBlank() },
-        articleUrl = url
+        articleUrl = url,
+        isBookmarked = isBookmarked
     )
 }
 

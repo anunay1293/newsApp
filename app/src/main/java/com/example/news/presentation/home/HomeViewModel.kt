@@ -33,15 +33,16 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
     
     /**
-     * Get paged articles for current category.
-     * This Flow is reactive to category changes via selectedCategory StateFlow.
+     * Get paged articles for current category and search query.
+     * This Flow is reactive to category and search query changes via uiState StateFlow.
      * Cached in ViewModelScope for configuration changes.
      */
     val pagedArticles: Flow<PagingData<ArticleUiModel>> = _uiState
-        .map { it.selectedCategory }
-        .distinctUntilChanged()
-        .flatMapLatest { category ->
-            repository.getPagedArticles(category)
+        .distinctUntilChanged { old, new -> 
+            old.selectedCategory == new.selectedCategory && old.searchQuery == new.searchQuery
+        }
+        .flatMapLatest { state ->
+            repository.getPagedArticles(state.selectedCategory, state.searchQuery)
                 .cachedIn(viewModelScope)
         }
     
@@ -60,9 +61,23 @@ class HomeViewModel(
             is HomeUiEvent.OnCategorySelected -> {
                 observeCategory(event.category)
             }
+            is HomeUiEvent.OnSearchQueryChanged -> {
+                // Update search query in state - this will trigger pagedArticles Flow update
+                _uiState.value = _uiState.value.copy(searchQuery = event.searchQuery)
+            }
+            is HomeUiEvent.OnBookmarkToggle -> {
+                toggleBookmark(event.articleId)
+            }
             is HomeUiEvent.OnRetryClicked -> {
                 refreshCurrentCategory()
             }
+        }
+    }
+    
+    private fun toggleBookmark(articleId: String) {
+        viewModelScope.launch {
+            repository.toggleBookmark(articleId)
+            // Bookmark state will automatically update via Flow when PagingSource invalidates
         }
     }
     

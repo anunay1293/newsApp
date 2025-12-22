@@ -6,15 +6,16 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 /**
- * Room database for news articles.
+ * Room database for news articles and bookmarks.
  */
 @Database(
-    entities = [ArticleEntity::class],
-    version = 1,
+    entities = [ArticleEntity::class, BookmarkEntity::class],
+    version = 2,
     exportSchema = false
 )
 abstract class NewsDatabase : RoomDatabase() {
     abstract fun articleDao(): ArticleDao
+    abstract fun bookmarkDao(): BookmarkDao
     
     companion object {
         @Volatile
@@ -26,7 +27,9 @@ abstract class NewsDatabase : RoomDatabase() {
                     context.applicationContext,
                     NewsDatabase::class.java,
                     "news_database"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration() // For development - remove in production and add proper migrations
+                    .build()
                 INSTANCE = instance
                 instance
             }
