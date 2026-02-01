@@ -1,33 +1,25 @@
-# newsApp
+# News Flow (News App + Serverless AWS Backend)
 
-A news application built with Jetpack Compose and Material 3 that displays top headlines from NewsAPI.
+News Flow is an Android news application built with **Kotlin + Jetpack Compose** and backed by a **serverless AWS backend** for scheduled ingestion, storage, and low-latency reads. The goal is fast, reliable delivery of categorized news feeds with a clean, testable architecture.
 
-## Setup
+---
 
-### API Key Configuration
+## Tech Stack
 
-This app requires a NewsAPI key to fetch news articles. Follow these steps:
+### Android (Client)
+- Kotlin, Jetpack Compose
+- Retrofit
+- Room Database
+- Paging3
+- MVVM + Repository pattern
 
-1. Get your API key from [NewsAPI](https://newsapi.org/)
-2. Open or create the `local.properties` file in the project root directory
-3. Add the following line:
-   ```
-   NEWS_API_KEY=your_api_key_here
-   ```
-4. Replace `your_api_key_here` with your actual NewsAPI key
-
-**Note:** The `local.properties` file is already in `.gitignore` and will not be committed to version control.
+### Backend (AWS – Serverless)
+- Amazon EventBridge (scheduled ingestion)
+- AWS Lambda (ingestion + read APIs)
+- Amazon DynamoDB (news storage + TTL expiration)
+- Amazon API Gateway (REST API layer)
+- Amazon Cognito (authentication)
 
 ## Architecture
 
-The app follows a layered architecture:
-- **UI Layer**: Jetpack Compose screens and components
-- **Presentation Layer**: ViewModels and UI state/events
-- **Data Layer**: Repository, API service (Retrofit), and DTOs
-
-## Features
-
-- Browse news articles by category (general, technology, business, sports, health, science, entertainment)
-- View article details with images, author, and publication date
-- Open articles in browser
-- Loading and error states
+<img width="3887" height="3079" alt="image" src="https://github.com/user-attachments/assets/4b446ee5-69fa-490e-a078-d91a58aea568" />
