@@ -17,7 +17,7 @@ News Flow is an Android news application built with **Kotlin + Jetpack Compose**
 - Amazon EventBridge (scheduled ingestion)
 - AWS Lambda (ingestion + read APIs)
 - Amazon DynamoDB (news storage + TTL expiration)
-- Amazon API Gateway (REST API layer)
+- Amazon API Gateway 
 - Amazon Cognito (authentication)
 
 ## Architecture
