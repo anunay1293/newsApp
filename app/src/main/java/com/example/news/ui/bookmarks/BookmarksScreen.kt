@@ -57,7 +57,17 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Screen displaying all bookmarked articles.
+ * Composable screen that displays the user's bookmarked articles in a paginated list.
+ *
+ * Handles three visual states:
+ * 1. **Loading** – a centered spinner with "Loading bookmarks…" text while Paging 3
+ *    performs the initial Room query.
+ * 2. **Empty** – a friendly placeholder when no bookmarks exist yet.
+ * 3. **Content** – a [LazyColumn] of [ArticleCard] items with a bottom-loading indicator
+ *    for pagination.
+ *
+ * A [BookmarksViewModel] is instantiated with a manual [ViewModelProvider.Factory] and
+ * user interactions are forwarded via [BookmarksUiEvent].
  */
 @Composable
 fun BookmarksScreen() {
@@ -195,7 +205,15 @@ fun BookmarksScreen() {
 }
 
 /**
- * Article card component (reused from HomeScreen but with bookmark toggle).
+ * Displays a single bookmarked article as a Material 3 card.
+ *
+ * The card layout mirrors the one on the home screen: optional hero image with a gradient
+ * overlay, title with a bookmark toggle icon, and an author / date footer. Tapping the
+ * card opens the article URL in an external browser via an implicit [Intent.ACTION_VIEW].
+ *
+ * @param article          The [ArticleUiModel] data to render.
+ * @param onBookmarkToggle Callback invoked with the article's ID when the user taps the
+ *                         bookmark heart icon.
  */
 @Composable
 private fun ArticleCard(
@@ -331,6 +349,12 @@ private fun ArticleCard(
     }
 }
 
+/**
+ * Converts a Unix-epoch millisecond timestamp into a human-readable date string.
+ *
+ * @param timestamp Milliseconds since the Unix epoch representing the publication date.
+ * @return A formatted string in the pattern "MMM dd, yyyy" (e.g., "Feb 23, 2026").
+ */
 private fun formatDate(timestamp: Long): String {
     val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     return dateFormat.format(Date(timestamp))

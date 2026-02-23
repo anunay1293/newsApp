@@ -32,6 +32,22 @@ import androidx.activity.ComponentActivity
 import com.example.news.presentation.auth.AuthUiState
 import com.example.news.presentation.auth.AuthViewModel
 
+/**
+ * Email confirmation screen composable shown after a new user registers.
+ *
+ * Displays the target [email] and an input field for the 6-digit confirmation code.
+ * On submission, [AuthViewModel.confirmSignUp] is called. A [LaunchedEffect] watches
+ * [AuthViewModel.authState]; when it transitions to [AuthUiState.SignedOut] (meaning
+ * confirmation succeeded), the user is automatically navigated to the sign-in screen.
+ *
+ * A "Resend Code" button allows the user to request a fresh verification code via
+ * [AuthViewModel.resendCode].
+ *
+ * @param email             The email address that requires verification, passed as a
+ *                          navigation argument.
+ * @param onNavigateToSignIn Callback invoked to navigate back to the sign-in screen
+ *                           after successful email confirmation.
+ */
 @Composable
 fun ConfirmScreen(
     email: String,

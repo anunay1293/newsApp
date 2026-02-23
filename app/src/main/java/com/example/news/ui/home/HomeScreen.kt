@@ -76,6 +76,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** All available news category slugs shown in the category dropdown selector. */
 private val NEWS_CATEGORIES = listOf(
     "general",
     "technology",
@@ -87,7 +88,16 @@ private val NEWS_CATEGORIES = listOf(
 )
 
 /**
- * Main screen displaying news articles with category filter.
+ * Main composable for the news feed screen.
+ *
+ * Renders a header with the app title, a category dropdown, a search field, and a
+ * vertically-scrolling list of [ArticleCard] items backed by Paging 3. The screen
+ * handles all Paging load states (initial loading, appending, errors, empty results)
+ * with appropriate visual feedback.
+ *
+ * A [HomeViewModel] is created using the current [Application] context and a manual
+ * [ViewModelProvider.Factory]. User interactions are forwarded to the ViewModel via
+ * [HomeUiEvent] instances.
  */
 @Composable
 fun HomeScreen() {
@@ -602,13 +612,18 @@ private fun ArticleCard(
 }
 
 /**
- * Formats a timestamp to a readable date string.
+ * Converts a Unix-epoch millisecond timestamp into a human-readable date string.
+ *
+ * @param timestamp The publication date expressed as milliseconds since the Unix epoch.
+ * @return A formatted date string in the pattern "MMM dd, yyyy" (e.g., "Jan 15, 2025"),
+ *         using the device's default locale.
  */
 private fun formatDate(timestamp: Long): String {
     val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     return dateFormat.format(Date(timestamp))
 }
 
+/** Android Studio preview for the [HomeScreen] composable. */
 @Preview(showBackground = true)
 @Composable
 private fun HomeScreenPreview() {

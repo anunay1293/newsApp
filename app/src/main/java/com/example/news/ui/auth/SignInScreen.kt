@@ -44,6 +44,17 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.activity.ComponentActivity
 import com.example.news.presentation.auth.AuthViewModel
 
+/**
+ * Sign-in screen composable where returning users enter their email and password.
+ *
+ * Uses the shared [AuthViewModel] (scoped to the Activity) to invoke [AuthViewModel.signIn].
+ * The screen observes [AuthViewModel.isLoading] and [AuthViewModel.errorMessage] to display
+ * a loading spinner on the button and an error banner respectively. A "Don't have an account?
+ * Sign Up" link navigates to the sign-up screen.
+ *
+ * @param onNavigateToSignUp Callback invoked when the user taps the "Sign Up" text button,
+ *                           triggering navigation to [SignUpScreen].
+ */
 @Composable
 fun SignInScreen(
     onNavigateToSignUp: () -> Unit

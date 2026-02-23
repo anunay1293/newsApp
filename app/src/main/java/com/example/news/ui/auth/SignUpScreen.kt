@@ -46,6 +46,19 @@ import androidx.activity.ComponentActivity
 import com.example.news.presentation.auth.AuthUiState
 import com.example.news.presentation.auth.AuthViewModel
 
+/**
+ * Sign-up screen composable where new users create an account.
+ *
+ * After the user submits their email and password, [AuthViewModel.signUp] is called.
+ * A [LaunchedEffect] observes [AuthViewModel.authState] and navigates to the confirmation
+ * screen when the state transitions to [AuthUiState.NeedsConfirmation]. A short delay is
+ * introduced before navigation to ensure state stability.
+ *
+ * @param onNavigateToConfirm Callback invoked with the user's email when sign-up succeeds
+ *                            and email confirmation is required.
+ * @param onNavigateToSignIn  Callback invoked when the user taps "Already have an account?
+ *                            Sign In" to return to the sign-in screen.
+ */
 @Composable
 fun SignUpScreen(
     onNavigateToConfirm: (String) -> Unit,

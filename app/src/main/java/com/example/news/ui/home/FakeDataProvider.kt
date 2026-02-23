@@ -3,13 +3,26 @@ package com.example.news.ui.home
 import com.example.news.ui.model.ArticleUiModel
 
 /**
- * Provides fake in-memory data for HomeScreen.
- * TODO: Replace with ViewModel that fetches data from repository.
+ * Singleton that supplies hardcoded sample articles for use in Compose previews and
+ * early-stage development before the real API integration was available.
+ *
+ * **Note:** This provider is no longer used at runtime — the app now fetches live data
+ * through [NewsRepository][com.example.news.data.repository.NewsRepository]. It is retained
+ * for preview composables and potential UI-testing scenarios.
  */
 object FakeDataProvider {
+    /** Reference timestamp (current wall-clock time) used to compute relative dates. */
     private val now = System.currentTimeMillis()
+
+    /** Number of milliseconds in one calendar day. */
     private val oneDayMillis = 24 * 60 * 60 * 1000L
 
+    /**
+     * Returns a list of eight mock [ArticleUiModel] instances spanning various categories
+     * and authors, with publication dates spread across the past week.
+     *
+     * @return An immutable list of sample articles suitable for preview rendering.
+     */
     fun getFakeArticles(): List<ArticleUiModel> = listOf(
         ArticleUiModel(
             id = "1",

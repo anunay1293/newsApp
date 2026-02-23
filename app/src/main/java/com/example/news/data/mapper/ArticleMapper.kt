@@ -7,26 +7,30 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * Maps ArticleDto to ArticleUiModel.
- * Handles missing/null fields gracefully with defaults.
+ * Extension function that maps an [ArticleDto] (raw API response) directly to an
+ * [ArticleUiModel] (presentation layer).
+ *
+ * This mapper is an older convenience method from before Room was introduced. The
+ * current production flow uses [ArticleDto.toEntity] → Room → [ArticleEntity.toUiModel]
+ * instead. This function is retained for potential use in scenarios where articles
+ * are displayed without local persistence (e.g., search-only results).
+ *
+ * Null-safety strategy:
+ * - `url` → hashed to produce the ID; falls back to a random UUID if absent.
+ * - `title` → defaults to "No title available".
+ * - `author` → defaults to "Unknown" if null or blank.
+ * - `publishedAt` → parsed via [parsePublishedDate]; defaults to current time on failure.
+ * - `urlToImage` → passed through as-is (nullable); blank strings are treated as null.
+ * - `url` (article link) → defaults to an empty string.
+ *
+ * @return A fully populated [ArticleUiModel] with sensible defaults for any missing fields.
  */
 fun ArticleDto.toUiModel(): ArticleUiModel {
-    // Generate ID from URL or use UUID if URL is null
     val id = url?.hashCode()?.toString() ?: UUID.randomUUID().toString()
-    
-    // Extract title or use default
     val title = title ?: "No title available"
-    
-    // Extract author or use "Unknown"
     val author = author?.takeIf { it.isNotBlank() } ?: "Unknown"
-    
-    // Parse published date (ISO 8601 format from API)
     val publishedDate = parsePublishedDate(publishedAt)
-    
-    // Extract image URL (nullable)
     val imageUrl = urlToImage?.takeIf { it.isNotBlank() }
-    
-    // Extract article URL or use empty string (shouldn't happen but handle gracefully)
     val articleUrl = url ?: ""
     
     return ArticleUiModel(
@@ -40,9 +44,18 @@ fun ArticleDto.toUiModel(): ArticleUiModel {
 }
 
 /**
- * Parses ISO 8601 date string to Unix timestamp in milliseconds.
- * Returns current time if parsing fails.
- * Handles formats like: "2024-01-15T10:30:00Z" or "2024-01-15T10:30:00+00:00"
+ * Parses an ISO 8601 date string into a Unix-epoch millisecond timestamp.
+ *
+ * Attempts multiple common ISO 8601 variants in order:
+ * 1. `yyyy-MM-dd'T'HH:mm:ss'Z'`
+ * 2. `yyyy-MM-dd'T'HH:mm:ssZ`
+ * 3. `yyyy-MM-dd'T'HH:mm:ss.SSS'Z'`
+ * 4. `yyyy-MM-dd'T'HH:mm:ss.SSSZ`
+ *
+ * @param dateString The date string from the API, e.g., `"2025-01-15T10:30:00Z"`.
+ *                   May be `null` or blank.
+ * @return The parsed timestamp in milliseconds, or [System.currentTimeMillis] if the
+ *         input is null, blank, or does not match any supported format.
  */
 private fun parsePublishedDate(dateString: String?): Long {
     if (dateString == null || dateString.isBlank()) {

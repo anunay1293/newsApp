@@ -11,32 +11,37 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
+/** Dark color scheme using the purple/pink palette defined in Color.kt. */
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
     secondary = PurpleGrey80,
     tertiary = Pink80
 )
 
+/** Light color scheme using the purple/pink palette defined in Color.kt. */
 private val LightColorScheme = lightColorScheme(
     primary = Purple40,
     secondary = PurpleGrey40,
     tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
 )
 
+/**
+ * Application-wide Material 3 theme wrapper.
+ *
+ * Chooses the appropriate color scheme based on the following priority:
+ * 1. **Dynamic colors** (Android 12+) – derives colors from the user's wallpaper.
+ * 2. **Dark / light fallback** – uses the manually defined [DarkColorScheme] or
+ *    [LightColorScheme] when dynamic colors are unavailable or disabled.
+ *
+ * The [Typography] set defined in `Type.kt` is applied globally.
+ *
+ * @param darkTheme    Whether dark mode is active; defaults to the system setting.
+ * @param dynamicColor Whether to use Material You dynamic colors on Android 12+.
+ * @param content      The composable content to render within this theme.
+ */
 @Composable
 fun NewsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {

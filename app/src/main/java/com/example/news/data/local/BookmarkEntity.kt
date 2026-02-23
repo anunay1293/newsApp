@@ -6,8 +6,19 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Room entity for storing bookmarked articles.
- * References ArticleEntity via articleId (foreign key).
+ * Room entity representing a user's bookmark for a specific article.
+ *
+ * Each row links to an [ArticleEntity] via the [articleId] foreign key. A cascading
+ * delete rule ensures that if an article is removed from the `articles` table, its
+ * corresponding bookmark row is automatically deleted as well.
+ *
+ * The `articleId` column has a unique index, preventing duplicate bookmarks for the
+ * same article.
+ *
+ * @property articleId    The ID of the bookmarked article; matches [ArticleEntity.articleId].
+ * @property bookmarkedAt Unix-epoch millisecond timestamp of when the bookmark was created.
+ *                        Defaults to the current time at insertion. Used to sort the
+ *                        bookmarks screen by most-recently-bookmarked first.
  */
 @Entity(
     tableName = "bookmarks",
@@ -16,7 +27,7 @@ import androidx.room.PrimaryKey
             entity = ArticleEntity::class,
             parentColumns = ["articleId"],
             childColumns = ["articleId"],
-            onDelete = ForeignKey.CASCADE // If article is deleted, bookmark is also deleted
+            onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [Index(value = ["articleId"], unique = true)]

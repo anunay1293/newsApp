@@ -23,7 +23,21 @@ import com.example.news.ui.navigation.AuthNavigation
 import com.example.news.ui.navigation.NewsNavigation
 import com.example.news.ui.theme.NewsTheme
 
+/**
+ * The single Activity for this application, following the single-Activity architecture pattern.
+ *
+ * Sets up edge-to-edge rendering and delegates all UI composition to [AuthGate], which decides
+ * whether to show the authentication flow or the main news content based on the current
+ * [AuthUiState].
+ */
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Initializes the Activity, enables edge-to-edge display, and sets the Compose content
+     * wrapped in the app's [NewsTheme].
+     *
+     * @param savedInstanceState Bundle containing the Activity's previously saved state, if any.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -35,12 +49,25 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Top-level composable that acts as an authentication gate for the entire app.
+ *
+ * Observes the [AuthUiState] from a shared [AuthViewModel] (scoped to the Activity) and
+ * conditionally renders one of:
+ * - A loading spinner while the current session is being checked ([AuthUiState.CheckingSession])
+ * - The authentication navigation graph for sign-in/sign-up flows ([AuthUiState.SignedOut] or
+ *   [AuthUiState.NeedsConfirmation])
+ * - The main news navigation graph once the user is authenticated ([AuthUiState.SignedIn])
+ *
+ * The [AuthViewModel] is obtained using the Activity's [ViewModelStoreOwner] so that the same
+ * instance is shared across all composables (auth screens, settings, etc.), ensuring a single
+ * source of truth for authentication state.
+ */
 @Composable
 fun AuthGate() {
     val application = LocalContext.current.applicationContext as Application
     val activity = (androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity)
         ?: return
-    // Use Activity's ViewModelStoreOwner to share ViewModel instance across all screens
     val viewModel: AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         viewModelStoreOwner = activity,
         factory = object : ViewModelProvider.Factory {
@@ -63,13 +90,10 @@ fun AuthGate() {
         }
         is AuthUiState.SignedOut -> {
             AuthNavigation(
-                onAuthSuccess = {
-                    // Navigation will be handled by state change
-                }
+                onAuthSuccess = {}
             )
         }
         is AuthUiState.NeedsConfirmation -> {
-            // Show auth navigation - individual screens will handle their own navigation
             AuthNavigation(
                 onAuthSuccess = {}
             )

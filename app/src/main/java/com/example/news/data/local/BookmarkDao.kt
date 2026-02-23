@@ -9,7 +9,12 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 /**
- * DAO for bookmark database operations.
+ * Data Access Object for the `bookmarks` table.
+ *
+ * Provides insert, delete, query, and observation operations for user bookmarks.
+ * Bookmark-related reads support both one-shot suspend queries (e.g., [getAllBookmarkedIds])
+ * and reactive [Flow]-based observation (e.g., [observeAllBookmarkedIds]) to drive
+ * real-time UI updates when bookmarks change.
  */
 @Dao
 interface BookmarkDao {

@@ -35,6 +35,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.activity.ComponentActivity
 import com.example.news.presentation.auth.AuthViewModel
 
+/**
+ * Settings screen composable providing account management options.
+ *
+ * Currently displays a single "Account" card with a sign-out button. The shared
+ * [AuthViewModel] (scoped to the Activity) is used so that signing out here
+ * immediately transitions the top-level [AuthGate] back to the sign-in flow.
+ *
+ * If the sign-out operation fails, an error message is displayed inside the card.
+ * While the operation is in progress, the button shows a loading spinner and is disabled.
+ */
 @Composable
 fun SettingsScreen() {
     val application = LocalContext.current.applicationContext as Application
