@@ -25,11 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import android.app.Application
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModelProvider
-import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.news.R
 import com.example.news.presentation.auth.AuthUiState
 import com.example.news.presentation.auth.AuthViewModel
@@ -38,7 +35,8 @@ import com.example.news.presentation.auth.AuthViewModel
  * Email confirmation screen composable shown after a new user registers.
  *
  * Displays the target [email] and an input field for the 6-digit confirmation code.
- * On submission, [AuthViewModel.confirmSignUp] is called. A [LaunchedEffect] watches
+ * On submission, [AuthViewModel.confirmSignUp] is called via the shared [AuthViewModel]
+ * (scoped to the Activity via [hiltViewModel]). A [LaunchedEffect] watches
  * [AuthViewModel.authState]; when it transitions to [AuthUiState.SignedOut] (meaning
  * confirmation succeeded), the user is automatically navigated to the sign-in screen.
  *
@@ -55,29 +53,8 @@ fun ConfirmScreen(
     email: String,
     onNavigateToSignIn: () -> Unit
 ) {
-    val application = LocalContext.current.applicationContext as Application
-    val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
-    // Use Activity's ViewModelStoreOwner to share ViewModel instance with AuthGate
-    val viewModel: AuthViewModel = if (activity != null) {
-        androidx.lifecycle.viewmodel.compose.viewModel(
-            viewModelStoreOwner = activity,
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    } else {
-        viewModel(
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    }
+    val activity = LocalActivity.current as androidx.activity.ComponentActivity
+    val viewModel: AuthViewModel = hiltViewModel(viewModelStoreOwner = activity)
     var confirmationCode by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()

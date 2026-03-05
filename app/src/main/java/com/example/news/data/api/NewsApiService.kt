@@ -9,7 +9,7 @@ import retrofit2.http.Query
  * hosted on AWS API Gateway.
  *
  * The API is public and does not require authentication headers or API keys.
- * Base URL configuration is handled by [NewsApiModule].
+ * Base URL configuration is handled by the Hilt [NetworkModule].
  */
 interface NewsApiService {
 

@@ -4,16 +4,18 @@ import android.app.Application
 import com.amplifyframework.AmplifyException
 import com.amplifyframework.auth.cognito.AWSCognitoAuthPlugin
 import com.amplifyframework.core.Amplify
+import dagger.hilt.android.HiltAndroidApp
 
 /**
- * Custom [Application] subclass that serves as the entry point for app-wide initialization.
+ * Custom [Application] subclass annotated with [HiltAndroidApp] to trigger Hilt's
+ * code generation and serve as the application-level dependency container.
  *
- * Responsible for bootstrapping the AWS Amplify framework with the Cognito authentication
- * plugin before any Activity or Service is created. The Amplify configuration is read from
- * `res/raw/amplifyconfiguration.json` at startup.
+ * Also bootstraps the AWS Amplify framework with the Cognito authentication plugin
+ * before any Activity or Service is created.
  *
  * Declared in `AndroidManifest.xml` via `android:name=".NewsApplication"`.
  */
+@HiltAndroidApp
 class NewsApplication : Application() {
 
     /**

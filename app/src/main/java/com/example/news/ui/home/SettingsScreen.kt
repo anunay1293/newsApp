@@ -10,8 +10,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.LocalActivity
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -29,49 +30,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import android.app.Application
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModelProvider
-import androidx.activity.ComponentActivity
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.news.R
 import com.example.news.presentation.auth.AuthViewModel
 
 /**
  * Settings screen composable providing account management options.
  *
- * Currently displays a single "Account" card with a sign-out button. The shared
- * [AuthViewModel] (scoped to the Activity) is used so that signing out here
- * immediately transitions the top-level [AuthGate] back to the sign-in flow.
+ * Displays a single "Account" card with a sign-out button. The shared [AuthViewModel]
+ * (scoped to the Activity via [hiltViewModel]) is used so that signing out here
+ * immediately transitions the top-level AuthGate back to the sign-in flow.
  *
  * If the sign-out operation fails, an error message is displayed inside the card.
  * While the operation is in progress, the button shows a loading spinner and is disabled.
  */
 @Composable
 fun SettingsScreen() {
-    val application = LocalContext.current.applicationContext as Application
-    val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
-    // Use Activity's ViewModelStoreOwner to share ViewModel instance with AuthGate
-    val viewModel: AuthViewModel = if (activity != null) {
-        androidx.lifecycle.viewmodel.compose.viewModel(
-            viewModelStoreOwner = activity,
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    } else {
-        viewModel(
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    }
+    val activity = LocalActivity.current as androidx.activity.ComponentActivity
+    val viewModel: AuthViewModel = hiltViewModel(viewModelStoreOwner = activity)
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
@@ -171,7 +147,7 @@ fun SettingsScreen() {
                             )
                         } else {
                             Icon(
-                                imageVector = Icons.Default.ExitToApp,
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                                 contentDescription = stringResource(R.string.cd_sign_out),
                                 modifier = Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.onErrorContainer

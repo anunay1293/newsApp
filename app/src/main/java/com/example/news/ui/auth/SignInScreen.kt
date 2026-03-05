@@ -38,21 +38,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import android.app.Application
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModelProvider
-import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.news.R
 import com.example.news.presentation.auth.AuthViewModel
 
 /**
  * Sign-in screen composable where returning users enter their email and password.
  *
- * Uses the shared [AuthViewModel] (scoped to the Activity) to invoke [AuthViewModel.signIn].
- * The screen observes [AuthViewModel.isLoading] and [AuthViewModel.errorMessage] to display
- * a loading spinner on the button and an error banner respectively. A "Don't have an account?
- * Sign Up" link navigates to the sign-up screen.
+ * Uses the shared [AuthViewModel] (scoped to the Activity via [hiltViewModel]) to invoke
+ * [AuthViewModel.signIn]. The screen observes [AuthViewModel.isLoading] and
+ * [AuthViewModel.errorMessage] to display a loading spinner on the button and an error
+ * banner respectively. A "Don't have an account? Sign Up" link navigates to the sign-up screen.
  *
  * @param onNavigateToSignUp Callback invoked when the user taps the "Sign Up" text button,
  *                           triggering navigation to [SignUpScreen].
@@ -61,29 +58,8 @@ import com.example.news.presentation.auth.AuthViewModel
 fun SignInScreen(
     onNavigateToSignUp: () -> Unit
 ) {
-    val application = LocalContext.current.applicationContext as Application
-    val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
-    // Use Activity's ViewModelStoreOwner to share ViewModel instance with AuthGate
-    val viewModel: AuthViewModel = if (activity != null) {
-        androidx.lifecycle.viewmodel.compose.viewModel(
-            viewModelStoreOwner = activity,
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    } else {
-        viewModel(
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    }
+    val activity = LocalActivity.current as androidx.activity.ComponentActivity
+    val viewModel: AuthViewModel = hiltViewModel(viewModelStoreOwner = activity)
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()

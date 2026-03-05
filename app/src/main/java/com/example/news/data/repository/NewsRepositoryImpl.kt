@@ -1,57 +1,50 @@
 package com.example.news.data.repository
 
-import android.content.Context
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import androidx.paging.map
-import com.example.news.data.api.NewsApiModule
+import com.example.news.data.api.NewsApiService
+import com.example.news.data.local.ArticleDao
+import com.example.news.data.local.BookmarkDao
 import com.example.news.data.local.BookmarkEntity
-import com.example.news.data.local.NewsDatabase
+import com.example.news.data.mapper.toDomain
 import com.example.news.data.mapper.toEntity
-import com.example.news.data.mapper.toUiModel
-import com.example.news.ui.model.ArticleUiModel
+import com.example.news.domain.model.Article
+import com.example.news.domain.repository.NewsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Concrete implementation of [NewsRepository] using the **Single Source of Truth (SSOT)** pattern.
  *
  * Architecture overview:
- * - **Reads** are served exclusively from Room via Paging 3 ([ArticleDao], [BookmarkDao]).
- * - **Writes** fetch data from [NewsApiService], map DTOs to entities, and upsert them into Room.
- *   Room then automatically invalidates the PagingSource so the UI picks up changes.
- * - A separate in-memory [_bookmarkedIds] cache is maintained for the feed screen's bookmark
- *   icons, avoiding a JOIN on every page load.
+ * - **Reads** are served exclusively from Room via Paging 3, returning domain [Article] objects.
+ * - **Writes** fetch data from the remote API, map DTOs to entities, and upsert them into Room.
+ *   Room then automatically invalidates the PagingSource so observers pick up changes.
+ * - A separate in-memory [_bookmarkedIds] cache tracks bookmark state without requiring
+ *   a JOIN on every page load.
  *
- * @param context        Application [Context] used to obtain the Room database singleton.
- * @param newsApiService The Retrofit API service for fetching news articles from the remote API
- *                       (defaults to the singleton from [NewsApiModule]).
+ * All dependencies are provided by Hilt via constructor injection.
+ *
+ * @param articleDao     DAO for article CRUD and paging queries.
+ * @param bookmarkDao    DAO for bookmark CRUD, observation, and paged bookmark queries.
+ * @param newsApiService The Retrofit API service for fetching news articles from the remote API.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class NewsRepositoryImpl(
-    context: Context,
-    private val newsApiService: com.example.news.data.api.NewsApiService = NewsApiModule.newsApiService
+class NewsRepositoryImpl @Inject constructor(
+    private val articleDao: ArticleDao,
+    private val bookmarkDao: BookmarkDao,
+    private val newsApiService: NewsApiService
 ) : NewsRepository {
-    
-    /** Singleton Room database instance. */
-    private val database = NewsDatabase.getDatabase(context)
-
-    /** DAO for article CRUD and paging queries. */
-    private val articleDao = database.articleDao()
-
-    /** DAO for bookmark CRUD, observation, and paged bookmark queries. */
-    private val bookmarkDao = database.bookmarkDao()
     
     /** Dedicated IO-bound coroutine scope for bookmark cache refreshes. */
     private val bookmarkScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -92,14 +85,14 @@ class NewsRepositoryImpl(
      * Returns a paginated article stream for the given [category] and optional [searchQuery].
      *
      * Implementation details:
-     * 1. Refreshes the in-memory bookmark-ID cache so bookmark icons are accurate.
+     * 1. Refreshes the in-memory bookmark-ID cache so bookmark state is accurate.
      * 2. Uses [flatMapLatest] on [_bookmarkedIds] so that a new [Pager] is created whenever
      *    the bookmark set changes, avoiding the "collect twice" error on the same Pager flow.
-     * 3. Maps each [ArticleEntity] to an [ArticleUiModel], setting [isBookmarked] from the cache.
+     * 3. Maps each [ArticleEntity] to a domain [Article], setting [isBookmarked] from the cache.
      *
      * Paging configuration: 20 items per page, 10-item prefetch distance, no placeholders.
      */
-    override fun getPagedArticles(category: String, searchQuery: String): Flow<PagingData<ArticleUiModel>> {
+    override fun getPagedArticles(category: String, searchQuery: String): Flow<PagingData<Article>> {
         bookmarkScope.launch {
             refreshBookmarkedIds()
         }
@@ -116,7 +109,7 @@ class NewsRepositoryImpl(
                 pagingSourceFactory = pagingSourceFactory
             ).flow.map { pagingData ->
                 pagingData.map { entity -> 
-                    entity.toUiModel(isBookmarked = bookmarkedSet.contains(entity.articleId))
+                    entity.toDomain(isBookmarked = bookmarkedSet.contains(entity.articleId))
                 }
             }
         }
@@ -179,7 +172,7 @@ class NewsRepositoryImpl(
      * each time the bookmark table changes. Every entity returned by the bookmark JOIN query
      * is mapped with `isBookmarked = true` since, by definition, all results are bookmarked.
      */
-    override fun getPagedBookmarkedArticles(): Flow<PagingData<ArticleUiModel>> {
+    override fun getPagedBookmarkedArticles(): Flow<PagingData<Article>> {
         return bookmarkedIdsFromRoom
             .flatMapLatest {
                 val pagingSourceFactory = { bookmarkDao.getPagedBookmarkedArticles() }
@@ -192,7 +185,7 @@ class NewsRepositoryImpl(
                     ),
                     pagingSourceFactory = pagingSourceFactory
                 ).flow.map { pagingData -> 
-                    pagingData.map { entity -> entity.toUiModel(isBookmarked = true) }
+                    pagingData.map { entity -> entity.toDomain(isBookmarked = true) }
                 }
             }
     }

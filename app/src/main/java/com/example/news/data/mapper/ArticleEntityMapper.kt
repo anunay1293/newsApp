@@ -2,7 +2,7 @@ package com.example.news.data.mapper
 
 import com.example.news.data.dto.ArticleDto
 import com.example.news.data.local.ArticleEntity
-import com.example.news.ui.model.ArticleUiModel
+import com.example.news.domain.model.Article
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -37,19 +37,19 @@ fun ArticleDto.toEntity(category: String): ArticleEntity {
 }
 
 /**
- * Maps an [ArticleEntity] (Room table row) to an [ArticleUiModel] (presentation layer).
+ * Maps an [ArticleEntity] (Room table row) to a domain [Article].
  *
  * Parses the stored ISO 8601 [publishedAt] string into a Unix-epoch millisecond timestamp
  * and applies the same null/blank-handling defaults as the DTO mapper.
  *
  * @param isBookmarked Whether the current user has bookmarked this article. Defaults to
  *                     `false`; the repository sets this based on the bookmark cache.
- * @return A presentation-ready [ArticleUiModel] instance.
+ * @return A domain-layer [Article] instance.
  */
-fun ArticleEntity.toUiModel(isBookmarked: Boolean = false): ArticleUiModel {
+fun ArticleEntity.toDomain(isBookmarked: Boolean = false): Article {
     val publishedDate = parsePublishedDate(publishedAt)
     
-    return ArticleUiModel(
+    return Article(
         id = articleId,
         title = title,
         author = author.takeIf { it.isNotBlank() } ?: "Unknown",

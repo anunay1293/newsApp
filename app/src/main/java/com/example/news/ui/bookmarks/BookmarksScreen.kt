@@ -2,6 +2,7 @@ package com.example.news.ui.bookmarks
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,10 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,14 +37,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.ViewModelProvider
-import android.app.Application
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
@@ -51,9 +51,6 @@ import com.example.news.R
 import com.example.news.presentation.bookmarks.BookmarksUiEvent
 import com.example.news.presentation.bookmarks.BookmarksViewModel
 import com.example.news.ui.model.ArticleUiModel
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,26 +59,18 @@ import java.util.Locale
  * Composable screen that displays the user's bookmarked articles in a paginated list.
  *
  * Handles three visual states:
- * 1. **Loading** – a centered spinner with "Loading bookmarks…" text while Paging 3
+ * 1. **Loading** -- a centered spinner with "Loading bookmarks..." text while Paging 3
  *    performs the initial Room query.
- * 2. **Empty** – a friendly placeholder when no bookmarks exist yet.
- * 3. **Content** – a [LazyColumn] of [ArticleCard] items with a bottom-loading indicator
+ * 2. **Empty** -- a friendly placeholder when no bookmarks exist yet.
+ * 3. **Content** -- a [LazyColumn] of [ArticleCard] items with a bottom-loading indicator
  *    for pagination.
  *
- * A [BookmarksViewModel] is instantiated with a manual [ViewModelProvider.Factory] and
- * user interactions are forwarded via [BookmarksUiEvent].
+ * The [BookmarksViewModel] is provided by Hilt via [hiltViewModel]. User interactions
+ * are forwarded via [BookmarksUiEvent].
  */
 @Composable
 fun BookmarksScreen() {
-    val application = LocalContext.current.applicationContext as Application
-    val viewModel: BookmarksViewModel = viewModel(
-        factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return BookmarksViewModel(application) as T
-            }
-        }
-    )
+    val viewModel: BookmarksViewModel = hiltViewModel()
     val pagedArticles = viewModel.pagedArticles.collectAsLazyPagingItems()
     
     Column(

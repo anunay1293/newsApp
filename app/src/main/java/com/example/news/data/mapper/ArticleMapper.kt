@@ -7,21 +7,11 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * Extension function that maps an [ArticleDto] (raw API response) directly to an
- * [ArticleUiModel] (presentation layer).
+ * Legacy convenience mapper: [ArticleDto] → [ArticleUiModel] (bypasses Room).
  *
- * This mapper is an older convenience method from before Room was introduced. The
- * current production flow uses [ArticleDto.toEntity] → Room → [ArticleEntity.toUiModel]
- * instead. This function is retained for potential use in scenarios where articles
- * are displayed without local persistence (e.g., search-only results).
- *
- * Null-safety strategy:
- * - `url` → hashed to produce the ID; falls back to a random UUID if absent.
- * - `title` → defaults to "No title available".
- * - `author` → defaults to "Unknown" if null or blank.
- * - `publishedAt` → parsed via [parsePublishedDate]; defaults to current time on failure.
- * - `urlToImage` → passed through as-is (nullable); blank strings are treated as null.
- * - `url` (article link) → defaults to an empty string.
+ * The current production flow is [ArticleDto.toEntity] → Room → [ArticleEntity.toDomain]
+ * → [Article.toUiModel]. This function is retained for potential use in scenarios where
+ * articles are displayed without local persistence (e.g., search-only results).
  *
  * @return A fully populated [ArticleUiModel] with sensible defaults for any missing fields.
  */
