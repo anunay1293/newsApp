@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -71,6 +72,7 @@ import coil.compose.AsyncImage
 import com.example.news.presentation.home.HomeUiEvent
 import com.example.news.presentation.home.HomeViewModel
 import com.example.news.ui.model.ArticleUiModel
+import com.example.news.R
 import com.example.news.ui.theme.NewsTheme
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -131,14 +133,14 @@ fun HomeScreen() {
                     .padding(horizontal = 20.dp, vertical = 24.dp)
             ) {
                 Text(
-                    text = "News App",
+                    text = stringResource(R.string.home_title),
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Stay updated with the latest news",
+                    text = stringResource(R.string.home_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                 )
@@ -153,7 +155,7 @@ fun HomeScreen() {
             // Category dropdown
             Column {
                 Text(
-                    text = "Category",
+                    text = stringResource(R.string.label_category),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -170,7 +172,7 @@ fun HomeScreen() {
                             modifier = Modifier.weight(1f)
                         )
                         Text(
-                            text = "▼",
+                            text = stringResource(R.string.dropdown_arrow),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 8.dp)
                         )
@@ -203,7 +205,7 @@ fun HomeScreen() {
             // Search field
             Column {
                 Text(
-                    text = "Search Articles",
+                    text = stringResource(R.string.label_search_articles),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -216,14 +218,14 @@ fun HomeScreen() {
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { 
                         Text(
-                            text = "Search by title, author, or source...",
+                            text = stringResource(R.string.search_placeholder),
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         ) 
                     },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
-                            contentDescription = "Search",
+                            contentDescription = stringResource(R.string.cd_search),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
                     },
@@ -240,7 +242,7 @@ fun HomeScreen() {
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Clear search",
+                                    contentDescription = stringResource(R.string.cd_clear_search),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -281,7 +283,7 @@ fun HomeScreen() {
                             modifier = Modifier.padding(24.dp)
                         ) {
                             Text(
-                                text = "Oops! Something went wrong",
+                                text = stringResource(R.string.error_title),
                                 style = MaterialTheme.typography.headlineSmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 fontWeight = FontWeight.Bold,
@@ -289,7 +291,7 @@ fun HomeScreen() {
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
                             Text(
-                                text = uiState.errorMessage ?: "Unknown error",
+                                text = uiState.errorMessage ?: stringResource(R.string.error_unknown),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
                                 textAlign = TextAlign.Center,
@@ -301,7 +303,7 @@ fun HomeScreen() {
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = "Retry",
+                                    text = stringResource(R.string.action_retry),
                                     style = MaterialTheme.typography.titleMedium,
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 )
@@ -362,7 +364,7 @@ fun HomeScreen() {
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Text(
-                                        text = "Error loading more: ${error.message}",
+                                        text = stringResource(R.string.error_loading_more, error.message ?: ""),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onErrorContainer,
                                         modifier = Modifier.padding(16.dp)
@@ -386,7 +388,7 @@ fun HomeScreen() {
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
                                         Text(
-                                            text = "No articles found",
+                                            text = stringResource(R.string.empty_no_articles),
                                             style = MaterialTheme.typography.headlineSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontWeight = FontWeight.SemiBold
@@ -394,9 +396,9 @@ fun HomeScreen() {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
                                             text = if (uiState.searchQuery.isNotEmpty()) {
-                                                "Try adjusting your search terms"
+                                                stringResource(R.string.empty_adjust_search)
                                             } else {
-                                                "Check back later for updates"
+                                                stringResource(R.string.empty_check_later)
                                             },
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -424,7 +426,7 @@ fun HomeScreen() {
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
-                                    text = "Loading articles...",
+                                    text = stringResource(R.string.loading_articles),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -454,7 +456,7 @@ fun HomeScreen() {
                                     strokeWidth = 2.dp
                                 )
                                 Text(
-                                    text = "Refreshing...",
+                                    text = stringResource(R.string.refreshing),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -561,9 +563,9 @@ private fun ArticleCard(
                                 Icons.Default.FavoriteBorder
                             },
                             contentDescription = if (article.isBookmarked) {
-                                "Remove bookmark"
+                                stringResource(R.string.cd_remove_bookmark)
                             } else {
-                                "Add bookmark"
+                                stringResource(R.string.cd_add_bookmark)
                             },
                             tint = if (article.isBookmarked) {
                                 MaterialTheme.colorScheme.primary
@@ -591,7 +593,7 @@ private fun ArticleCard(
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
                         ) {
                             Text(
-                                text = article.author ?: "Unknown",
+                                text = article.author ?: stringResource(R.string.author_unknown),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Medium,

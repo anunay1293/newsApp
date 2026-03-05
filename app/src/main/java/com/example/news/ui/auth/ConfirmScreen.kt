@@ -23,12 +23,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.app.Application
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.activity.ComponentActivity
+import com.example.news.R
 import com.example.news.presentation.auth.AuthUiState
 import com.example.news.presentation.auth.AuthViewModel
 
@@ -96,13 +98,13 @@ fun ConfirmScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Confirm Email",
+            text = stringResource(R.string.confirm_title),
             style = MaterialTheme.typography.headlineLarge,
             modifier = Modifier.padding(bottom = 32.dp)
         )
 
         Text(
-            text = "Enter the confirmation code sent to:",
+            text = stringResource(R.string.confirm_instruction),
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -117,7 +119,7 @@ fun ConfirmScreen(
         OutlinedTextField(
             value = confirmationCode,
             onValueChange = { confirmationCode = it },
-            label = { Text("Confirmation Code") },
+            label = { Text(stringResource(R.string.label_confirmation_code)) },
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
             singleLine = true
@@ -148,7 +150,7 @@ fun ConfirmScreen(
                     color = MaterialTheme.colorScheme.onPrimary
                 )
             } else {
-                Text("Confirm")
+                Text(stringResource(R.string.action_confirm))
             }
         }
 
@@ -158,7 +160,7 @@ fun ConfirmScreen(
             onClick = { viewModel.resendCode(email) },
             enabled = !isLoading
         ) {
-            Text("Resend Code")
+            Text(stringResource(R.string.action_resend_code))
         }
     }
 }

@@ -37,6 +37,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -46,6 +47,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
+import com.example.news.R
 import com.example.news.presentation.bookmarks.BookmarksUiEvent
 import com.example.news.presentation.bookmarks.BookmarksViewModel
 import com.example.news.ui.model.ArticleUiModel
@@ -100,13 +102,13 @@ fun BookmarksScreen() {
                     .padding(20.dp)
             ) {
                 Text(
-                    text = "Bookmarks",
+                    text = stringResource(R.string.bookmarks_title),
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    text = "Your saved articles",
+                    text = stringResource(R.string.bookmarks_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                 )
@@ -132,7 +134,7 @@ fun BookmarksScreen() {
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Loading bookmarks...",
+                            text = stringResource(R.string.loading_bookmarks),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -148,14 +150,14 @@ fun BookmarksScreen() {
                         modifier = Modifier.padding(48.dp)
                     ) {
                         Text(
-                            text = "No bookmarks yet",
+                            text = stringResource(R.string.empty_no_bookmarks),
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Bookmark articles to read them later",
+                            text = stringResource(R.string.empty_bookmark_hint),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center
@@ -300,9 +302,9 @@ private fun ArticleCard(
                                 Icons.Default.FavoriteBorder
                             },
                             contentDescription = if (article.isBookmarked) {
-                                "Remove bookmark"
+                                stringResource(R.string.cd_remove_bookmark)
                             } else {
-                                "Add bookmark"
+                                stringResource(R.string.cd_add_bookmark)
                             },
                             tint = if (article.isBookmarked) {
                                 MaterialTheme.colorScheme.primary
@@ -329,7 +331,7 @@ private fun ArticleCard(
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
                         ) {
                             Text(
-                                text = article.author ?: "Unknown",
+                                text = article.author ?: stringResource(R.string.author_unknown),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Medium,

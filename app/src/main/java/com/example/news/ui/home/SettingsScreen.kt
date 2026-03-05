@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,6 +34,7 @@ import android.app.Application
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModelProvider
 import androidx.activity.ComponentActivity
+import com.example.news.R
 import com.example.news.presentation.auth.AuthViewModel
 
 /**
@@ -90,14 +92,14 @@ fun SettingsScreen() {
                     .padding(horizontal = 20.dp, vertical = 24.dp)
             ) {
                 Text(
-                    text = "Settings",
+                    text = stringResource(R.string.settings_title),
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Manage your app preferences",
+                    text = stringResource(R.string.settings_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                 )
@@ -128,7 +130,7 @@ fun SettingsScreen() {
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = "Account",
+                        text = stringResource(R.string.settings_account),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -170,13 +172,13 @@ fun SettingsScreen() {
                         } else {
                             Icon(
                                 imageVector = Icons.Default.ExitToApp,
-                                contentDescription = "Sign Out",
+                                contentDescription = stringResource(R.string.cd_sign_out),
                                 modifier = Modifier.size(20.dp),
                                 tint = MaterialTheme.colorScheme.onErrorContainer
                             )
                             Spacer(modifier = Modifier.size(8.dp))
                             Text(
-                                "Sign Out",
+                                stringResource(R.string.action_sign_out),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
