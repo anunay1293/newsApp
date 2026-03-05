@@ -56,6 +56,10 @@
     <string name="action_confirm">Confirm</string>
     <string name="action_resend_code">Resend Code</string>
 
+    <!-- Article Detail Screen -->
+    <string name="cd_navigate_back">Navigate back</string>
+    <string name="error_article_not_found">Article not found</string>
+
     <!-- Bookmarks Screen -->
     <string name="bookmarks_title">Bookmarks</string>
     <string name="bookmarks_subtitle">Your saved articles</string>

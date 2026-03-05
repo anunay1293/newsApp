@@ -166,6 +166,20 @@ class NewsRepositoryImpl @Inject constructor(
     }
     
     /**
+     * Retrieves a single article by its [articleId] from the local Room database.
+     *
+     * Bookmark state is resolved from the in-memory [_bookmarkedIds] cache so the returned
+     * [Article] reflects the current bookmark status without an extra database query.
+     *
+     * @return The matching [Article] with its bookmark state, or `null` if not found.
+     */
+    override suspend fun getArticleById(articleId: String): Article? {
+        val entity = articleDao.getArticleById(articleId) ?: return null
+        val isBookmarked = _bookmarkedIds.value.contains(articleId)
+        return entity.toDomain(isBookmarked)
+    }
+
+    /**
      * Returns a paginated stream of all bookmarked articles.
      *
      * Observes [bookmarkedIdsFromRoom] and uses [flatMapLatest] to create a fresh [Pager]

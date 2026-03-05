@@ -1,7 +1,5 @@
 package com.example.news.ui.bookmarks
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -67,9 +64,14 @@ import java.util.Locale
  *
  * The [BookmarksViewModel] is provided by Hilt via [hiltViewModel]. User interactions
  * are forwarded via [BookmarksUiEvent].
+ *
+ * @param onArticleClick Callback invoked with the article's ID when the user taps an article
+ *                       card, used to navigate to the in-app article detail screen.
  */
 @Composable
-fun BookmarksScreen() {
+fun BookmarksScreen(
+    onArticleClick: (String) -> Unit
+) {
     val viewModel: BookmarksViewModel = hiltViewModel()
     val pagedArticles = viewModel.pagedArticles.collectAsLazyPagingItems()
     
@@ -166,6 +168,7 @@ fun BookmarksScreen() {
                         if (article != null) {
                             ArticleCard(
                                 article = article,
+                                onArticleClick = onArticleClick,
                                 onBookmarkToggle = { articleId ->
                                     viewModel.handleEvent(BookmarksUiEvent.OnBookmarkToggle(articleId))
                                 }
@@ -200,26 +203,23 @@ fun BookmarksScreen() {
  *
  * The card layout mirrors the one on the home screen: optional hero image with a gradient
  * overlay, title with a bookmark toggle icon, and an author / date footer. Tapping the
- * card opens the article URL in an external browser via an implicit [Intent.ACTION_VIEW].
+ * card navigates to the in-app article detail screen.
  *
  * @param article          The [ArticleUiModel] data to render.
+ * @param onArticleClick   Callback invoked with the article's ID when the card is tapped.
  * @param onBookmarkToggle Callback invoked with the article's ID when the user taps the
  *                         bookmark heart icon.
  */
 @Composable
 private fun ArticleCard(
     article: ArticleUiModel,
+    onArticleClick: (String) -> Unit,
     onBookmarkToggle: (String) -> Unit
 ) {
-    val context = LocalContext.current
-    
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(article.articleUrl))
-                context.startActivity(intent)
-            },
+            .clickable { onArticleClick(article.id) },
         elevation = CardDefaults.cardElevation(
             defaultElevation = 2.dp,
             pressedElevation = 6.dp,

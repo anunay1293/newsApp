@@ -1,7 +1,5 @@
 package com.example.news.ui.home
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -60,7 +58,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -113,10 +110,15 @@ private val NEWS_CATEGORIES = listOf(
  *
  * The [HomeViewModel] is provided by Hilt via [hiltViewModel]. User interactions are
  * forwarded to the ViewModel via [HomeUiEvent] instances.
+ *
+ * @param onArticleClick Callback invoked with the article's ID when the user taps an article
+ *                       card, used to navigate to the in-app article detail screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    onArticleClick: (String) -> Unit
+) {
     val viewModel: HomeViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsState()
     val pagedArticles = viewModel.pagedArticles.collectAsLazyPagingItems()
@@ -207,6 +209,7 @@ fun HomeScreen() {
                         if (article != null) {
                             ArticleCard(
                                 article = article,
+                                onArticleClick = onArticleClick,
                                 onBookmarkToggle = { articleId ->
                                     viewModel.handleEvent(HomeUiEvent.OnBookmarkToggle(articleId))
                                 }
@@ -542,23 +545,23 @@ private fun HomeCollapsibleHeader(
 
 /**
  * Displays a single article card with image, title, author, and date.
- * Clicking the card opens the article URL in a browser.
+ * Clicking the card navigates to the in-app article detail screen.
  * Includes a bookmark icon to toggle bookmark state.
+ *
+ * @param article          The [ArticleUiModel] data to render.
+ * @param onArticleClick   Callback invoked with the article's ID when the card is tapped.
+ * @param onBookmarkToggle Callback invoked with the article's ID when the bookmark icon is tapped.
  */
 @Composable
 private fun ArticleCard(
     article: ArticleUiModel,
+    onArticleClick: (String) -> Unit,
     onBookmarkToggle: (String) -> Unit
 ) {
-    val context = LocalContext.current
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(article.articleUrl))
-                context.startActivity(intent)
-            },
+            .clickable { onArticleClick(article.id) },
         elevation = CardDefaults.cardElevation(
             defaultElevation = 2.dp,
             pressedElevation = 6.dp,
@@ -696,6 +699,6 @@ private fun formatDate(timestamp: Long): String {
 @Composable
 private fun HomeScreenPreview() {
     NewsTheme {
-        HomeScreen()
+        HomeScreen(onArticleClick = {})
     }
 }

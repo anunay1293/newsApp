@@ -63,4 +63,15 @@ interface NewsRepository {
      * @return A [Flow] of [PagingData] containing only bookmarked [Article] items.
      */
     fun getPagedBookmarkedArticles(): Flow<PagingData<Article>>
+
+    /**
+     * Retrieves a single [Article] by its unique [articleId] from the local Room database.
+     *
+     * Used by the article detail screen to load full article data (title, URL, bookmark
+     * state, etc.) for in-app display.
+     *
+     * @param articleId The unique identifier of the article to retrieve.
+     * @return The matching [Article], or `null` if no article with that ID exists locally.
+     */
+    suspend fun getArticleById(articleId: String): Article?
 }

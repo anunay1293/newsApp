@@ -96,5 +96,14 @@ interface ArticleDao {
         )
     """)
     suspend fun deleteOldNonBookmarkedArticles(category: String, keepLimit: Int)
+
+    /**
+     * Retrieves a single article by its unique [articleId].
+     * Used by the article detail screen to load full article data from the local cache.
+     *
+     * @return The matching [ArticleEntity], or `null` if no article with that ID exists.
+     */
+    @Query("SELECT * FROM articles WHERE articleId = :articleId")
+    suspend fun getArticleById(articleId: String): ArticleEntity?
 }
 
