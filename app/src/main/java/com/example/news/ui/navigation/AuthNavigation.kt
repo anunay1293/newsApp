@@ -27,7 +27,8 @@ sealed class AuthScreen(val route: String) {
     object SignUp : AuthScreen("sign_up")
 
     /**
-     * The email-confirmation screen shown after successful sign-up.
+     * The email-confirmation screen shown after sign-up or when sign-in reveals an
+     * unconfirmed account.
      *
      * @property email The email address passed as a navigation argument (defaults to empty
      *                 when used as a route template).
@@ -44,11 +45,17 @@ sealed class AuthScreen(val route: String) {
 }
 
 /**
- * Composable that hosts the authentication navigation graph (sign-in → sign-up → confirm).
+ * Composable that hosts the authentication navigation graph
+ * (sign-in ↔ sign-up → confirm → auto sign-in).
  *
  * The graph starts at [AuthScreen.SignIn]. Navigation between screens is handled via
  * lambda callbacks passed to each screen composable, keeping the screens decoupled from
  * the navigation framework.
+ *
+ * Both [SignInScreen] and [SignUpScreen] can navigate to [ConfirmScreen] when the account
+ * requires email verification. After successful confirmation the user is automatically
+ * signed in; [onAuthSuccess] is invoked to leave the auth graph. If auto sign-in fails,
+ * the user falls back to [SignInScreen].
  *
  * @param onAuthSuccess Callback invoked when the authentication flow completes successfully.
  *                      In practice the [AuthGate] observes state changes instead, so this
@@ -69,6 +76,9 @@ fun AuthNavigation(
                 onNavigateToSignUp = {
                     navController.navigate(AuthScreen.SignUp.route)
                 },
+                onNavigateToConfirm = { email ->
+                    navController.navigate(AuthScreen.Confirm("").createRoute(email))
+                },
                 onSignInSuccess = onAuthSuccess
             )
         }
@@ -78,7 +88,6 @@ fun AuthNavigation(
                 onNavigateToConfirm = { email ->
                     android.util.Log.d("AuthNavigation", "Navigating to confirm screen for: $email")
                     navController.navigate(AuthScreen.Confirm("").createRoute(email)) {
-                        // Pop back stack to sign up so back button doesn't go back to sign up
                         popUpTo(AuthScreen.SignUp.route) { inclusive = false }
                     }
                 },
@@ -94,6 +103,7 @@ fun AuthNavigation(
             val email = backStackEntry.arguments?.getString("email") ?: ""
             ConfirmScreen(
                 email = email,
+                onAuthSuccess = onAuthSuccess,
                 onNavigateToSignIn = {
                     navController.navigate(AuthScreen.SignIn.route) {
                         popUpTo(AuthScreen.SignIn.route) { inclusive = true }

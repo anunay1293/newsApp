@@ -76,4 +76,12 @@ interface AuthRepository {
      * @return The user's unique ID, or `null` if no user is currently signed in.
      */
     suspend fun getUserId(): String?
+
+    /**
+     * Retrieves the email address of the currently signed-in user.
+     *
+     * @return The user's email, or `null` if no user is signed in or the attribute
+     *         cannot be retrieved.
+     */
+    suspend fun getCurrentUserEmail(): String?
 }

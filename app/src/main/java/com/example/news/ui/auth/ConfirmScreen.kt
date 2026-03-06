@@ -32,25 +32,33 @@ import com.example.news.presentation.auth.AuthUiState
 import com.example.news.presentation.auth.AuthViewModel
 
 /**
- * Email confirmation screen composable shown after a new user registers.
+ * Email confirmation screen composable shown after a new user registers or when a
+ * sign-in attempt reveals an unconfirmed account.
  *
  * Displays the target [email] and an input field for the 6-digit confirmation code.
  * On submission, [AuthViewModel.confirmSignUp] is called via the shared [AuthViewModel]
  * (scoped to the Activity via [hiltViewModel]). A [LaunchedEffect] watches
- * [AuthViewModel.authState]; when it transitions to [AuthUiState.SignedOut] (meaning
- * confirmation succeeded), the user is automatically navigated to the sign-in screen.
+ * [AuthViewModel.authState] for two possible outcomes:
+ *
+ * - [AuthUiState.SignedIn] -- auto sign-in after confirmation succeeded; [onAuthSuccess]
+ *   is invoked to complete the auth flow and return the user to the main app.
+ * - [AuthUiState.SignedOut] -- auto sign-in failed (e.g. network error); [onNavigateToSignIn]
+ *   is invoked as a fallback so the user can sign in manually.
  *
  * A "Resend Code" button allows the user to request a fresh verification code via
  * [AuthViewModel.resendCode].
  *
- * @param email             The email address that requires verification, passed as a
- *                          navigation argument.
- * @param onNavigateToSignIn Callback invoked to navigate back to the sign-in screen
- *                           after successful email confirmation.
+ * @param email              The email address that requires verification, passed as a
+ *                           navigation argument.
+ * @param onAuthSuccess      Callback invoked when confirmation and auto sign-in both
+ *                           succeed, completing the authentication flow.
+ * @param onNavigateToSignIn Fallback callback invoked when confirmation succeeds but
+ *                           auto sign-in fails, navigating to the sign-in screen.
  */
 @Composable
 fun ConfirmScreen(
     email: String,
+    onAuthSuccess: () -> Unit,
     onNavigateToSignIn: () -> Unit
 ) {
     val activity = LocalActivity.current as androidx.activity.ComponentActivity
@@ -61,9 +69,10 @@ fun ConfirmScreen(
     val authState by viewModel.authState.collectAsState()
 
     LaunchedEffect(authState) {
-        if (authState is AuthUiState.SignedOut) {
-            // Confirmation successful, navigate to sign in
-            onNavigateToSignIn()
+        when (authState) {
+            is AuthUiState.SignedIn -> onAuthSuccess()
+            is AuthUiState.SignedOut -> onNavigateToSignIn()
+            else -> { /* NeedsConfirmation or CheckingSession -- stay on this screen */ }
         }
     }
 

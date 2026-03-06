@@ -31,6 +31,7 @@
     <string name="settings_title">Settings</string>
     <string name="settings_subtitle">Manage your app preferences</string>
     <string name="settings_account">Account</string>
+    <string name="settings_signed_in_as">Signed in as %1$s</string>
     <string name="action_sign_out">Sign Out</string>
     <string name="cd_sign_out">Sign Out</string>
     <string name="cd_sign_in">Sign In</string>

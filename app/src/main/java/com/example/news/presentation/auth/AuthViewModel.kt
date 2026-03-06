@@ -11,6 +11,8 @@ import com.example.news.domain.usecase.ResendCodeUseCase
 import com.example.news.domain.usecase.SignInUseCase
 import com.example.news.domain.usecase.SignOutUseCase
 import com.example.news.domain.usecase.SignUpUseCase
+import com.example.news.domain.usecase.ClearBookmarksOnSignOutUseCase
+import com.example.news.domain.usecase.GetCurrentUserEmailUseCase
 import com.example.news.domain.usecase.SyncBookmarksOnSignInUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,7 +35,10 @@ import kotlinx.coroutines.launch
  * @param confirmSignUpUseCase    Use case for confirming an account with a verification code.
  * @param resendCodeUseCase       Use case for resending the confirmation code.
  * @param signInUseCase           Use case for authenticating an existing user.
- * @param signOutUseCase          Use case for signing the user out.
+ * @param signOutUseCase                Use case for signing the user out.
+ * @param syncBookmarksOnSignInUseCase  Use case for pulling remote bookmarks after sign-in.
+ * @param clearBookmarksOnSignOutUseCase Use case for wiping local bookmarks on sign-out.
+ * @param getCurrentUserEmailUseCase    Use case for retrieving the signed-in user's email.
  */
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -43,13 +48,24 @@ class AuthViewModel @Inject constructor(
     private val resendCodeUseCase: ResendCodeUseCase,
     private val signInUseCase: SignInUseCase,
     private val signOutUseCase: SignOutUseCase,
-    private val syncBookmarksOnSignInUseCase: SyncBookmarksOnSignInUseCase
+    private val syncBookmarksOnSignInUseCase: SyncBookmarksOnSignInUseCase,
+    private val clearBookmarksOnSignOutUseCase: ClearBookmarksOnSignOutUseCase,
+    private val getCurrentUserEmailUseCase: GetCurrentUserEmailUseCase
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthUiState>(AuthUiState.CheckingSession)
 
     /** Observable authentication state consumed by the UI layer. */
     val authState: StateFlow<AuthUiState> = _authState.asStateFlow()
+
+    /**
+     * Temporarily holds the user's password between sign-up (or sign-in that returns
+     * [AuthResult.NeedsConfirmation]) and the end of the email-confirmation flow.
+     *
+     * Cleared immediately after the auto sign-in attempt in [confirmSignUp], on a
+     * successful [signIn], and on [signOut] -- whichever comes first.
+     */
+    private var pendingPassword: String? = null
 
     private val _isLoading = MutableStateFlow(false)
 
@@ -61,6 +77,11 @@ class AuthViewModel @Inject constructor(
     /** User-facing error message from the most recent failed operation, or `null` if none. */
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _userEmail = MutableStateFlow<String?>(null)
+
+    /** Email address of the currently signed-in user, or `null` when signed out. */
+    val userEmail: StateFlow<String?> = _userEmail.asStateFlow()
+
     init {
         checkAuthSession()
     }
@@ -70,6 +91,10 @@ class AuthViewModel @Inject constructor(
      *
      * The check is skipped if the current state is [AuthUiState.NeedsConfirmation] to avoid
      * overriding a pending email-confirmation flow.
+     *
+     * When an existing signed-in session is detected (e.g. on cold start), bookmarks are
+     * synced from the remote source so that previously bookmarked articles reappear without
+     * requiring a manual sign-out/sign-in cycle.
      */
     fun checkAuthSession() {
         viewModelScope.launch {
@@ -83,6 +108,8 @@ class AuthViewModel @Inject constructor(
 
                 if (_authState.value !is AuthUiState.NeedsConfirmation) {
                     _authState.value = if (isSignedIn) {
+                        launch { syncBookmarksOnSignInUseCase() }
+                        fetchUserEmail()
                         AuthUiState.SignedIn
                     } else {
                         AuthUiState.SignedOut
@@ -101,12 +128,15 @@ class AuthViewModel @Inject constructor(
      * Registers a new user account with the given email and password.
      *
      * On success the state transitions to [AuthUiState.NeedsConfirmation] so the UI can
-     * navigate to the email-confirmation screen.
+     * navigate to the email-confirmation screen. The password is retained in
+     * [pendingPassword] so that [confirmSignUp] can auto sign-in after verification.
      */
     fun signUp(email: String, password: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+
+            pendingPassword = password
 
             val result = signUpUseCase(email, password)
             when (result) {
@@ -128,8 +158,13 @@ class AuthViewModel @Inject constructor(
     /**
      * Confirms a newly registered account by submitting the verification code.
      *
-     * On successful confirmation the state transitions to [AuthUiState.SignedOut] so the
-     * user can sign in with their new credentials.
+     * On successful confirmation the method automatically signs the user in using the
+     * password stored in [pendingPassword] (set during [signUp] or [signIn]). This
+     * avoids forcing the user back to the sign-in screen after registration.
+     *
+     * If the auto sign-in fails (e.g. network error) the state falls back to
+     * [AuthUiState.SignedOut] so the user can sign in manually.
+     * [pendingPassword] is always cleared after the attempt.
      */
     fun confirmSignUp(email: String, code: String) {
         viewModelScope.launch {
@@ -139,8 +174,27 @@ class AuthViewModel @Inject constructor(
             val result = confirmSignUpUseCase(email, code)
             when (result) {
                 is AuthResult.Success -> {
-                    _authState.value = AuthUiState.SignedOut
-                    _errorMessage.value = null
+                    val password = pendingPassword
+                    pendingPassword = null
+
+                    if (password != null) {
+                        val signInResult = signInUseCase(email, password)
+                        when (signInResult) {
+                            is AuthResult.Success -> {
+                                _authState.value = AuthUiState.SignedIn
+                                _errorMessage.value = null
+                                launch { syncBookmarksOnSignInUseCase() }
+                                fetchUserEmail()
+                            }
+                            else -> {
+                                _authState.value = AuthUiState.SignedOut
+                                _errorMessage.value = null
+                            }
+                        }
+                    } else {
+                        _authState.value = AuthUiState.SignedOut
+                        _errorMessage.value = null
+                    }
                 }
                 is AuthResult.Error -> {
                     _errorMessage.value = result.message
@@ -182,7 +236,10 @@ class AuthViewModel @Inject constructor(
     /**
      * Authenticates an existing user with the given email and password.
      *
-     * On success the state transitions to [AuthUiState.SignedIn].
+     * On success the state transitions to [AuthUiState.SignedIn] and any stale
+     * [pendingPassword] is cleared. If the account still requires email verification
+     * the password is stored in [pendingPassword] so [confirmSignUp] can auto sign-in
+     * after the user confirms.
      */
     fun signIn(email: String, password: String) {
         viewModelScope.launch {
@@ -192,14 +249,17 @@ class AuthViewModel @Inject constructor(
             val result = signInUseCase(email, password)
             when (result) {
                 is AuthResult.Success -> {
+                    pendingPassword = null
                     _authState.value = AuthUiState.SignedIn
                     _errorMessage.value = null
                     launch { syncBookmarksOnSignInUseCase() }
+                    fetchUserEmail()
                 }
                 is AuthResult.Error -> {
                     _errorMessage.value = result.message
                 }
                 is AuthResult.NeedsConfirmation -> {
+                    pendingPassword = password
                     _authState.value = AuthUiState.NeedsConfirmation(result.email)
                 }
             }
@@ -213,12 +273,19 @@ class AuthViewModel @Inject constructor(
      *
      * The local state is always set to [AuthUiState.SignedOut] regardless of whether
      * the operation succeeds, preventing the user from getting stuck in a signed-in
-     * state with an invalid token.
+     * state with an invalid token. Any stale [pendingPassword] is also cleared.
+     *
+     * Local bookmarks are wiped unconditionally (both success and error paths) so the
+     * feed does not display a previous user's bookmarks in the signed-out state.
+     * Remote bookmarks in DynamoDB are unaffected and will be re-synced on the next
+     * sign-in via [syncBookmarksOnSignInUseCase].
      */
     fun signOut() {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            pendingPassword = null
+            _userEmail.value = null
 
             val result = signOutUseCase()
             when (result) {
@@ -233,7 +300,21 @@ class AuthViewModel @Inject constructor(
                 is AuthResult.NeedsConfirmation -> { /* not expected for sign-out */ }
             }
 
+            clearBookmarksOnSignOutUseCase()
+
             _isLoading.value = false
+        }
+    }
+
+    /**
+     * Fetches the signed-in user's email from the auth provider and updates [_userEmail].
+     *
+     * Launched as a fire-and-forget coroutine; failures are silently ignored since the
+     * email label is non-critical UI.
+     */
+    private fun fetchUserEmail() {
+        viewModelScope.launch {
+            _userEmail.value = getCurrentUserEmailUseCase()
         }
     }
 

@@ -247,4 +247,21 @@ class AuthRepositoryImpl @Inject constructor() : AuthRepository {
             null
         }
     }
+
+    override suspend fun getCurrentUserEmail(): String? {
+        return try {
+            val attributes = suspendCancellableCoroutine { cont ->
+                Amplify.Auth.fetchUserAttributes(
+                    { attrs -> cont.resume(attrs) },
+                    { cont.resume(emptyList()) }
+                )
+            }
+            attributes
+                .firstOrNull { it.key == AuthUserAttributeKey.email() }
+                ?.value
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get user email", e)
+            null
+        }
+    }
 }

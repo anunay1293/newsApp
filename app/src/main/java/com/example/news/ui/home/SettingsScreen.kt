@@ -41,7 +41,7 @@ import com.example.news.presentation.auth.AuthViewModel
  * Settings screen composable providing account management options.
  *
  * Displays a single "Account" card whose content adapts to the current authentication state:
- * - **Signed in**: a "Sign Out" button that signs the user out via [AuthViewModel].
+ * - **Signed in**: the user's email address followed by a "Sign Out" button.
  * - **Signed out**: a "Sign In" button that navigates to the authentication flow.
  * - **Checking session**: a loading indicator while the session is being verified.
  *
@@ -153,6 +153,15 @@ fun SettingsScreen(
                         }
 
                         is AuthUiState.SignedIn -> {
+                            val userEmail by viewModel.userEmail.collectAsState()
+                            userEmail?.let { email ->
+                                Text(
+                                    text = stringResource(R.string.settings_signed_in_as, email),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+
                             Button(
                                 onClick = { viewModel.signOut() },
                                 modifier = Modifier

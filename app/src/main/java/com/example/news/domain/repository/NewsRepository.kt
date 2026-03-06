@@ -90,4 +90,13 @@ interface NewsRepository {
      * @param isBookmarked `true` if the article was just bookmarked, `false` if un-bookmarked.
      */
     suspend fun syncBookmarkToRemote(articleId: String, isBookmarked: Boolean)
+
+    /**
+     * Removes all local bookmark data and resets the in-memory bookmark-ID cache.
+     *
+     * Called on sign-out to prevent a previous user's bookmarks from appearing on the
+     * feed while no user is authenticated. Remote bookmarks in DynamoDB are not affected;
+     * they will be re-synced via [syncBookmarksFromRemote] on the next sign-in.
+     */
+    suspend fun clearLocalBookmarks()
 }

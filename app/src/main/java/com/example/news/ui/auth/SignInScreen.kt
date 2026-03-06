@@ -53,12 +53,23 @@ import com.example.news.presentation.auth.AuthViewModel
  * [AuthViewModel.errorMessage] to display a loading spinner on the button and an error
  * banner respectively. A "Don't have an account? Sign Up" link navigates to the sign-up screen.
  *
- * @param onNavigateToSignUp Callback invoked when the user taps the "Sign Up" text button,
- *                           triggering navigation to [SignUpScreen].
+ * A [LaunchedEffect] watches [AuthViewModel.authState] for two outcomes:
+ *
+ * - [AuthUiState.SignedIn] -- sign-in succeeded; [onSignInSuccess] is invoked.
+ * - [AuthUiState.NeedsConfirmation] -- the account exists but has not been verified;
+ *   [onNavigateToConfirm] is invoked with the email so the user can enter the
+ *   confirmation code.
+ *
+ * @param onNavigateToSignUp  Callback invoked when the user taps the "Sign Up" text button,
+ *                            triggering navigation to [SignUpScreen].
+ * @param onNavigateToConfirm Callback invoked with the user's email when sign-in reveals
+ *                            an unconfirmed account, navigating to the confirmation screen.
+ * @param onSignInSuccess     Callback invoked when authentication succeeds.
  */
 @Composable
 fun SignInScreen(
     onNavigateToSignUp: () -> Unit,
+    onNavigateToConfirm: (String) -> Unit,
     onSignInSuccess: () -> Unit = {}
 ) {
     val activity = LocalActivity.current as androidx.activity.ComponentActivity
@@ -70,8 +81,11 @@ fun SignInScreen(
     val authState by viewModel.authState.collectAsState()
 
     LaunchedEffect(authState) {
-        if (authState is AuthUiState.SignedIn) {
-            onSignInSuccess()
+        when (authState) {
+            is AuthUiState.SignedIn -> onSignInSuccess()
+            is AuthUiState.NeedsConfirmation ->
+                onNavigateToConfirm((authState as AuthUiState.NeedsConfirmation).email)
+            else -> { /* SignedOut or CheckingSession -- stay on this screen */ }
         }
     }
 

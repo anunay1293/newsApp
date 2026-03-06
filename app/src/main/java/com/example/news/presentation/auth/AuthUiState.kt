@@ -9,8 +9,11 @@ package com.example.news.presentation.auth
  * ```
  * CheckingSession ──► SignedIn
  *        │                ▲
- *        ▼                │
- *    SignedOut ──► NeedsConfirmation ──► SignedOut (confirmed) ──► SignedIn
+ *        ▼                │  (auto sign-in after confirmation)
+ *    SignedOut ──► NeedsConfirmation ──► SignedIn
+ *                         │
+ *                         ▼  (fallback if auto sign-in fails)
+ *                      SignedOut
  * ```
  */
 sealed class AuthUiState {

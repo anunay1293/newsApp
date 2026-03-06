@@ -256,6 +256,16 @@ class NewsRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Deletes all rows from the local bookmarks table and resets [_bookmarkedIds] to an
+     * empty set. The empty set triggers [flatMapLatest] in [getPagedArticles], causing
+     * the feed to re-emit all articles with `isBookmarked = false`.
+     */
+    override suspend fun clearLocalBookmarks() {
+        bookmarkDao.deleteAllBookmarks()
+        refreshBookmarkedIds()
+    }
+
     override suspend fun syncBookmarkToRemote(articleId: String, isBookmarked: Boolean) {
         if (isBookmarked) {
             val entity = articleDao.getArticleById(articleId) ?: return
