@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -42,6 +43,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -108,6 +111,15 @@ private val NEWS_CATEGORIES = listOf(
  * The article list is backed by Paging 3 and handles all load states (initial loading,
  * appending, errors, empty results) with appropriate visual feedback.
  *
+ * Pull-to-refresh is implemented via Material 3's [PullToRefreshBox] wrapping the **entire
+ * Scaffold**. Placing it at the outermost level of the nested-scroll chain ensures the
+ * collapsible header's [exitUntilCollapsedScrollBehavior] consumes overscroll first (to
+ * re-expand the header); only after the header is fully expanded **and** the list is at the
+ * top does remaining overscroll reach [PullToRefreshBox] to start the pull indicator. The
+ * gesture triggers a fresh API call whose results are upserted into Room; the UI continues
+ * to observe Room exclusively (SSOT). A custom indicator shows "Pull to refresh" with a
+ * downward arrow during the drag, switching to a spinner once the refresh begins.
+ *
  * The [HomeViewModel] is provided by Hilt via [hiltViewModel]. User interactions are
  * forwarded to the ViewModel via [HomeUiEvent] instances.
  *
@@ -127,27 +139,41 @@ fun HomeScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
         rememberTopAppBarState()
     )
+    val pullToRefreshState = rememberPullToRefreshState()
 
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            HomeCollapsibleHeader(
-                uiState = uiState,
-                isDropdownExpanded = isDropdownExpanded,
-                onDropdownExpandedChange = { isDropdownExpanded = it },
-                onEvent = viewModel::handleEvent,
-                scrollBehavior = scrollBehavior
+    PullToRefreshBox(
+        isRefreshing = uiState.isPullRefreshing,
+        onRefresh = { viewModel.handleEvent(HomeUiEvent.OnPullToRefresh) },
+        state = pullToRefreshState,
+        modifier = Modifier.fillMaxSize(),
+        indicator = {
+            PullToRefreshIndicator(
+                isPullRefreshing = uiState.isPullRefreshing,
+                distanceFraction = pullToRefreshState.distanceFraction,
+                modifier = Modifier.align(Alignment.TopCenter)
             )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
-        Box(
+        }
+    ) {
+        Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-        ) {
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                HomeCollapsibleHeader(
+                    uiState = uiState,
+                    isDropdownExpanded = isDropdownExpanded,
+                    onDropdownExpandedChange = { isDropdownExpanded = it },
+                    onEvent = viewModel::handleEvent,
+                    scrollBehavior = scrollBehavior
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.background
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
             if (uiState.errorMessage != null && pagedArticles.itemCount == 0) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -316,7 +342,7 @@ fun HomeScreen(
                 }
             }
 
-            if (uiState.isRefreshing && pagedArticles.itemCount > 0) {
+            if (uiState.isRefreshing && !uiState.isPullRefreshing && pagedArticles.itemCount > 0) {
                 Box(modifier = Modifier.align(Alignment.TopCenter)) {
                     Surface(
                         modifier = Modifier.padding(top = 8.dp),
@@ -341,6 +367,77 @@ fun HomeScreen(
                             )
                         }
                     }
+                }
+            }
+            }
+        }
+    }
+}
+
+/**
+ * Custom pull-to-refresh indicator that replaces Material 3's default circular spinner.
+ *
+ * During the pull gesture (before the refresh threshold is reached) the indicator shows a
+ * downward arrow icon alongside a "Pull to refresh" label. Once the refresh begins, the
+ * arrow is replaced with a small [CircularProgressIndicator] and the label changes to
+ * "Refreshing…". When the user releases without pulling past the threshold,
+ * [distanceFraction] animates back to 0 and the indicator naturally disappears.
+ *
+ * @param isPullRefreshing  `true` while the network refresh triggered by the pull gesture
+ *                          is in progress.
+ * @param distanceFraction  Current pull distance as a fraction of the threshold (0 = idle,
+ *                          1 = threshold reached). Provided by [PullToRefreshState].
+ * @param modifier          Modifier forwarded to the root layout (typically aligned to
+ *                          [Alignment.TopCenter] inside the [PullToRefreshBox]).
+ */
+@Composable
+private fun PullToRefreshIndicator(
+    isPullRefreshing: Boolean,
+    distanceFraction: Float,
+    modifier: Modifier = Modifier
+) {
+    val isVisible = distanceFraction > 0f || isPullRefreshing
+
+    AnimatedVisibility(
+        visible = isVisible,
+        modifier = modifier,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        Surface(
+            modifier = Modifier.padding(top = 8.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (isPullRefreshing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 2.dp
+                    )
+                    Text(
+                        text = stringResource(R.string.refreshing),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = stringResource(R.string.cd_pull_to_refresh_arrow),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = stringResource(R.string.pull_to_refresh),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

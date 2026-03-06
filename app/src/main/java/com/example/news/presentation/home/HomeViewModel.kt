@@ -37,6 +37,9 @@ import kotlinx.coroutines.launch
  * 3. Bookmark toggling -- delegates to [ToggleBookmarkUseCase] and relies on PagingSource
  *    invalidation to refresh bookmark icons.
  * 4. Error / retry -- surfaces network errors and allows the user to retry a failed refresh.
+ * 5. Pull-to-refresh -- user-initiated refresh via a swipe gesture, tracked by a dedicated
+ *    [HomeUiState.isPullRefreshing] flag to avoid showing the pull indicator during
+ *    automatic background refreshes.
  *
  * @param getPagedArticlesUseCase  Use case for observing paginated articles from Room.
  * @param refreshArticlesUseCase   Use case for fetching fresh articles from the remote API.
@@ -99,6 +102,9 @@ class HomeViewModel @Inject constructor(
             }
             is HomeUiEvent.OnRetryClicked -> {
                 refreshCurrentCategory()
+            }
+            is HomeUiEvent.OnPullToRefresh -> {
+                pullToRefresh()
             }
         }
     }
@@ -164,6 +170,29 @@ class HomeViewModel @Inject constructor(
                 if (currentCategory == category) {
                     _uiState.value = _uiState.value.copy(isRefreshing = false)
                 }
+            }
+        }
+    }
+
+    /**
+     * Handles a user-initiated pull-to-refresh gesture.
+     *
+     * Uses [HomeUiState.isPullRefreshing] instead of [HomeUiState.isRefreshing] so the
+     * pull indicator is only driven by physical pull gestures, not by automatic background
+     * refreshes (category change, initial load). The underlying API call and Room upsert
+     * are identical to [refreshCategory].
+     */
+    private fun pullToRefresh() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isPullRefreshing = true)
+            try {
+                refreshArticlesUseCase(currentCategory)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = e.message ?: "Failed to refresh articles"
+                )
+            } finally {
+                _uiState.value = _uiState.value.copy(isPullRefreshing = false)
             }
         }
     }

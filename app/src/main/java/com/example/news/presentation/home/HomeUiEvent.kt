@@ -32,5 +32,15 @@ sealed class HomeUiEvent {
 
     /** The user tapped the "Retry" button after a network error to re-attempt the refresh. */
     object OnRetryClicked : HomeUiEvent()
+
+    /**
+     * The user performed a pull-to-refresh gesture on the article list.
+     *
+     * Triggers a fresh API call and Room upsert for the currently selected category.
+     * Unlike automatic background refreshes (category change, initial load), this event
+     * drives a separate [HomeUiState.isPullRefreshing] flag so the pull indicator only
+     * appears in response to the physical gesture.
+     */
+    object OnPullToRefresh : HomeUiEvent()
 }
 
