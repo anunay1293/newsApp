@@ -19,6 +19,8 @@
     <string name="empty_check_later">Check back later for updates</string>
     <string name="loading_articles">Loading articles…</string>
     <string name="refreshing">Refreshing…</string>
+    <string name="pull_to_refresh">Pull to refresh</string>
+    <string name="cd_pull_to_refresh_arrow">Pull to refresh arrow</string>
 
     <!-- Shared / Article Card -->
     <string name="cd_remove_bookmark">Remove bookmark</string>
@@ -31,6 +33,7 @@
     <string name="settings_account">Account</string>
     <string name="action_sign_out">Sign Out</string>
     <string name="cd_sign_out">Sign Out</string>
+    <string name="cd_sign_in">Sign In</string>
 
     <!-- Sign In Screen -->
     <string name="sign_in_title">Welcome Back</string>
