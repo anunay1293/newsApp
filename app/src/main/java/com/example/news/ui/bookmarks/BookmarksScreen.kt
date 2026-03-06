@@ -47,6 +47,7 @@ import coil.compose.AsyncImage
 import com.example.news.R
 import com.example.news.presentation.bookmarks.BookmarksUiEvent
 import com.example.news.presentation.bookmarks.BookmarksViewModel
+import com.example.news.ui.mapper.toUiModel
 import com.example.news.ui.model.ArticleUiModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -167,7 +168,7 @@ fun BookmarksScreen(
                         val article = pagedArticles[index]
                         if (article != null) {
                             ArticleCard(
-                                article = article,
+                                article = article.toUiModel(),
                                 onArticleClick = onArticleClick,
                                 onBookmarkToggle = { articleId ->
                                     viewModel.handleEvent(BookmarksUiEvent.OnBookmarkToggle(articleId))

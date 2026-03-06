@@ -76,6 +76,7 @@ import com.example.news.R
 import com.example.news.presentation.home.HomeUiEvent
 import com.example.news.presentation.home.HomeUiState
 import com.example.news.presentation.home.HomeViewModel
+import com.example.news.ui.mapper.toUiModel
 import com.example.news.ui.model.ArticleUiModel
 import com.example.news.ui.theme.NewsTheme
 import java.text.SimpleDateFormat
@@ -234,7 +235,7 @@ fun HomeScreen(
                         val article = pagedArticles[index]
                         if (article != null) {
                             ArticleCard(
-                                article = article,
+                                article = article.toUiModel(),
                                 onArticleClick = onArticleClick,
                                 onBookmarkToggle = { articleId ->
                                     viewModel.handleEvent(HomeUiEvent.OnBookmarkToggle(articleId))

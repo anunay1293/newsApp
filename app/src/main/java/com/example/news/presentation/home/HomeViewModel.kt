@@ -6,12 +6,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import androidx.paging.map
+import com.example.news.domain.model.Article
 import com.example.news.domain.usecase.GetPagedArticlesUseCase
 import com.example.news.domain.usecase.RefreshArticlesUseCase
 import com.example.news.domain.usecase.ToggleBookmarkUseCase
-import com.example.news.presentation.mapper.toUiModel
-import com.example.news.ui.model.ArticleUiModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -20,7 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -59,19 +56,20 @@ class HomeViewModel @Inject constructor(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     /**
-     * Reactive stream of paged articles from the Room database, mapped to UI models.
+     * Reactive stream of paged domain [Article] objects from the Room database.
      *
      * Re-emits a new [PagingData] whenever [HomeUiState.selectedCategory] or
      * [HomeUiState.searchQuery] changes, using [flatMapLatest] to cancel stale queries.
      * The resulting flow is cached in [viewModelScope] to survive configuration changes.
+     * The UI layer is responsible for mapping each [Article] to an [ArticleUiModel] at
+     * render time.
      */
-    val pagedArticles: Flow<PagingData<ArticleUiModel>> = _uiState
+    val pagedArticles: Flow<PagingData<Article>> = _uiState
         .distinctUntilChanged { old, new ->
             old.selectedCategory == new.selectedCategory && old.searchQuery == new.searchQuery
         }
         .flatMapLatest { state ->
             getPagedArticlesUseCase(state.selectedCategory, state.searchQuery)
-                .map { pagingData -> pagingData.map { it.toUiModel() } }
                 .cachedIn(viewModelScope)
         }
 

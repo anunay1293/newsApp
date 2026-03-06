@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.example.news.domain.usecase.GetArticleByIdUseCase
 import com.example.news.domain.usecase.ToggleBookmarkUseCase
-import com.example.news.presentation.mapper.toUiModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,7 +65,7 @@ class ArticleDetailViewModel @Inject constructor(
                 val article = getArticleByIdUseCase(articleId)
                 if (article != null) {
                     _uiState.value = ArticleDetailUiState(
-                        article = article.toUiModel(),
+                        article = article,
                         isLoading = false
                     )
                 } else {

@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.news.R
 import com.example.news.presentation.articledetail.ArticleDetailUiEvent
 import com.example.news.presentation.articledetail.ArticleDetailViewModel
+import com.example.news.ui.mapper.toUiModel
 
 /**
  * Full-screen article detail screen that loads the article's web page in an embedded WebView.
@@ -64,13 +65,14 @@ fun ArticleDetailScreen(
 ) {
     val viewModel: ArticleDetailViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsState()
+    val article = uiState.article?.toUiModel()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = uiState.article?.title ?: "",
+                        text = article?.title ?: "",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium
@@ -85,7 +87,6 @@ fun ArticleDetailScreen(
                     }
                 },
                 actions = {
-                    val article = uiState.article
                     if (article != null) {
                         IconButton(
                             onClick = {
@@ -144,9 +145,9 @@ fun ArticleDetailScreen(
                     )
                 }
 
-                uiState.article != null -> {
+                article != null -> {
                     ArticleWebView(
-                        url = uiState.article!!.articleUrl,
+                        url = article.articleUrl,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
