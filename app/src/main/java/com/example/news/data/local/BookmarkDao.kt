@@ -65,5 +65,11 @@ interface BookmarkDao {
      */
     @Query("SELECT * FROM bookmarks WHERE articleId = :articleId")
     suspend fun getBookmark(articleId: String): BookmarkEntity?
+
+    /**
+     * Delete all bookmarks. Used during remote sync to replace with the remote set.
+     */
+    @Query("DELETE FROM bookmarks")
+    suspend fun deleteAllBookmarks()
 }
 

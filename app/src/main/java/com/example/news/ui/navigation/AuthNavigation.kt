@@ -68,7 +68,8 @@ fun AuthNavigation(
             SignInScreen(
                 onNavigateToSignUp = {
                     navController.navigate(AuthScreen.SignUp.route)
-                }
+                },
+                onSignInSuccess = onAuthSuccess
             )
         }
         

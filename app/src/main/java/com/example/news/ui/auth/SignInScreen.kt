@@ -26,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.compose.LocalActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.news.R
+import com.example.news.presentation.auth.AuthUiState
 import com.example.news.presentation.auth.AuthViewModel
 
 /**
@@ -56,7 +58,8 @@ import com.example.news.presentation.auth.AuthViewModel
  */
 @Composable
 fun SignInScreen(
-    onNavigateToSignUp: () -> Unit
+    onNavigateToSignUp: () -> Unit,
+    onSignInSuccess: () -> Unit = {}
 ) {
     val activity = LocalActivity.current as androidx.activity.ComponentActivity
     val viewModel: AuthViewModel = hiltViewModel(viewModelStoreOwner = activity)
@@ -64,6 +67,13 @@ fun SignInScreen(
     var password by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val authState by viewModel.authState.collectAsState()
+
+    LaunchedEffect(authState) {
+        if (authState is AuthUiState.SignedIn) {
+            onSignInSuccess()
+        }
+    }
 
     Column(
         modifier = Modifier

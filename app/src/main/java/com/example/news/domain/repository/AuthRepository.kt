@@ -61,4 +61,19 @@ interface AuthRepository {
      * @return [AuthResult.Success] on successful sign-out, or [AuthResult.Error] on failure.
      */
     suspend fun signOut(): AuthResult
+
+    /**
+     * Retrieves the current Cognito ID token for API authorization.
+     *
+     * @return The JWT ID token string, or `null` if the user is not signed in
+     *         or the token cannot be retrieved.
+     */
+    suspend fun getIdToken(): String?
+
+    /**
+     * Retrieves the unique Cognito user identifier (sub claim).
+     *
+     * @return The user's unique ID, or `null` if no user is currently signed in.
+     */
+    suspend fun getUserId(): String?
 }

@@ -7,17 +7,20 @@ import javax.inject.Inject
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.example.news.domain.model.Article
+import com.example.news.domain.model.BookmarkToggleResult
+import com.example.news.domain.usecase.AuthAwareToggleBookmarkUseCase
 import com.example.news.domain.usecase.GetPagedArticlesUseCase
 import com.example.news.domain.usecase.RefreshArticlesUseCase
-import com.example.news.domain.usecase.ToggleBookmarkUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -47,10 +50,13 @@ import kotlinx.coroutines.launch
 class HomeViewModel @Inject constructor(
     private val getPagedArticlesUseCase: GetPagedArticlesUseCase,
     private val refreshArticlesUseCase: RefreshArticlesUseCase,
-    private val toggleBookmarkUseCase: ToggleBookmarkUseCase
+    private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
+
+    private val _authRequiredChannel = Channel<String>(Channel.BUFFERED)
+    val authRequiredForBookmark: Flow<String> = _authRequiredChannel.receiveAsFlow()
 
     /** Observable UI state consumed by the home screen composable. */
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -96,7 +102,7 @@ class HomeViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(searchQuery = event.searchQuery)
             }
             is HomeUiEvent.OnBookmarkToggle -> {
-                toggleBookmark(event.articleId)
+                toggleBookmark(event.articleId, event.isCurrentlyBookmarked)
             }
             is HomeUiEvent.OnRetryClicked -> {
                 refreshCurrentCategory()
@@ -107,9 +113,12 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun toggleBookmark(articleId: String) {
+    private fun toggleBookmark(articleId: String, isCurrentlyBookmarked: Boolean) {
         viewModelScope.launch {
-            toggleBookmarkUseCase(articleId)
+            val result = authAwareToggleBookmarkUseCase(articleId, isCurrentlyBookmarked)
+            if (result is BookmarkToggleResult.AuthRequired) {
+                _authRequiredChannel.send(result.articleId)
+            }
         }
     }
 

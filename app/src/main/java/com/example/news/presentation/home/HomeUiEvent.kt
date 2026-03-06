@@ -28,7 +28,7 @@ sealed class HomeUiEvent {
      *
      * @property articleId The unique identifier of the article to bookmark or un-bookmark.
      */
-    data class OnBookmarkToggle(val articleId: String) : HomeUiEvent()
+    data class OnBookmarkToggle(val articleId: String, val isCurrentlyBookmarked: Boolean) : HomeUiEvent()
 
     /** The user tapped the "Retry" button after a network error to re-attempt the refresh. */
     object OnRetryClicked : HomeUiEvent()

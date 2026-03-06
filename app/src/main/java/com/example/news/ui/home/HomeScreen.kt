@@ -47,6 +47,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -130,12 +131,27 @@ private val NEWS_CATEGORIES = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onArticleClick: (String) -> Unit
+    onArticleClick: (String) -> Unit,
+    onSignInRequired: (String) -> Unit = {},
+    pendingBookmarkArticleId: String? = null,
+    onPendingBookmarkConsumed: () -> Unit = {}
 ) {
     val viewModel: HomeViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsState()
     val pagedArticles = viewModel.pagedArticles.collectAsLazyPagingItems()
     var isDropdownExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.authRequiredForBookmark.collect { articleId ->
+            onSignInRequired(articleId)
+        }
+    }
+
+    LaunchedEffect(pendingBookmarkArticleId) {
+        val id = pendingBookmarkArticleId ?: return@LaunchedEffect
+        viewModel.handleEvent(HomeUiEvent.OnBookmarkToggle(id, false))
+        onPendingBookmarkConsumed()
+    }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
         rememberTopAppBarState()
@@ -234,11 +250,14 @@ fun HomeScreen(
                     ) { index ->
                         val article = pagedArticles[index]
                         if (article != null) {
+                            val uiModel = article.toUiModel()
                             ArticleCard(
-                                article = article.toUiModel(),
+                                article = uiModel,
                                 onArticleClick = onArticleClick,
                                 onBookmarkToggle = { articleId ->
-                                    viewModel.handleEvent(HomeUiEvent.OnBookmarkToggle(articleId))
+                                    viewModel.handleEvent(
+                                        HomeUiEvent.OnBookmarkToggle(articleId, uiModel.isBookmarked)
+                                    )
                                 }
                             )
                         }

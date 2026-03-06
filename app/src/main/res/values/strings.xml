@@ -69,6 +69,8 @@
     <string name="loading_bookmarks">Loading bookmarks…</string>
     <string name="empty_no_bookmarks">No bookmarks yet</string>
     <string name="empty_bookmark_hint">Bookmark articles to read them later</string>
+    <string name="bookmarks_sign_in_title">Sign in to view bookmarks</string>
+    <string name="bookmarks_sign_in_subtitle">Your saved articles will appear here once you sign in</string>
 
     <!-- Navigation Tabs -->
     <string name="tab_feed">Feed</string>

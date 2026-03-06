@@ -4,11 +4,15 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.example.news.domain.model.BookmarkToggleResult
+import com.example.news.domain.usecase.AuthAwareToggleBookmarkUseCase
 import com.example.news.domain.usecase.GetArticleByIdUseCase
-import com.example.news.domain.usecase.ToggleBookmarkUseCase
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -28,12 +32,15 @@ import javax.inject.Inject
 class ArticleDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getArticleByIdUseCase: GetArticleByIdUseCase,
-    private val toggleBookmarkUseCase: ToggleBookmarkUseCase
+    private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase
 ) : ViewModel() {
 
     private val articleId: String = checkNotNull(savedStateHandle["articleId"])
 
     private val _uiState = MutableStateFlow(ArticleDetailUiState())
+
+    private val _authRequiredChannel = Channel<String>(Channel.BUFFERED)
+    val authRequiredForBookmark: Flow<String> = _authRequiredChannel.receiveAsFlow()
 
     /** Observable UI state consumed by the article detail screen composable. */
     val uiState: StateFlow<ArticleDetailUiState> = _uiState.asStateFlow()
@@ -91,11 +98,18 @@ class ArticleDetailViewModel @Inject constructor(
      */
     private fun toggleBookmark() {
         val currentArticle = _uiState.value.article ?: return
-        _uiState.value = _uiState.value.copy(
-            article = currentArticle.copy(isBookmarked = !currentArticle.isBookmarked)
-        )
         viewModelScope.launch {
-            toggleBookmarkUseCase(articleId)
+            val result = authAwareToggleBookmarkUseCase(articleId, currentArticle.isBookmarked)
+            when (result) {
+                is BookmarkToggleResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        article = currentArticle.copy(isBookmarked = !currentArticle.isBookmarked)
+                    )
+                }
+                is BookmarkToggleResult.AuthRequired -> {
+                    _authRequiredChannel.send(result.articleId)
+                }
+            }
         }
     }
 }

@@ -74,4 +74,20 @@ interface NewsRepository {
      * @return The matching [Article], or `null` if no article with that ID exists locally.
      */
     suspend fun getArticleById(articleId: String): Article?
+
+    /**
+     * Pulls all bookmarks from DynamoDB and replaces the local bookmark set.
+     *
+     * For each remote bookmark, upserts the associated article into Room (to satisfy the
+     * foreign key), then replaces local bookmarks with the remote set.
+     */
+    suspend fun syncBookmarksFromRemote()
+
+    /**
+     * Pushes a single bookmark change to DynamoDB (fire-and-forget).
+     *
+     * @param articleId    The article whose bookmark state changed.
+     * @param isBookmarked `true` if the article was just bookmarked, `false` if un-bookmarked.
+     */
+    suspend fun syncBookmarkToRemote(articleId: String, isBookmarked: Boolean)
 }

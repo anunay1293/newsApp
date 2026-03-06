@@ -1,7 +1,5 @@
 package com.example.news.ui.navigation
 
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.LocalActivity
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -17,12 +15,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -34,8 +30,6 @@ import androidx.navigation.navArgument
 import com.example.news.ui.articledetail.ArticleDetailScreen
 import com.example.news.ui.bookmarks.BookmarksScreen
 import com.example.news.R
-import com.example.news.presentation.auth.AuthUiState
-import com.example.news.presentation.auth.AuthViewModel
 import com.example.news.ui.home.HomeScreen
 import com.example.news.ui.home.SettingsScreen
 
@@ -77,7 +71,15 @@ sealed class Screen(val route: String, @StringRes val titleRes: Int) {
      * bar is hidden while this flow is active. When authentication succeeds the destination
      * is automatically popped, returning the user to the Settings tab.
      */
-    object SignInFlow : Screen("sign_in_flow", 0)
+    object SignInFlow : Screen("sign_in_flow?pendingBookmarkId={pendingBookmarkId}", 0) {
+        fun createRoute(pendingBookmarkId: String? = null): String {
+            return if (pendingBookmarkId != null) {
+                "sign_in_flow?pendingBookmarkId=$pendingBookmarkId"
+            } else {
+                "sign_in_flow"
+            }
+        }
+    }
 }
 
 /** Ordered list of bottom-navigation destinations, controlling tab display order. */
@@ -156,10 +158,21 @@ fun NewsNavigation() {
             startDestination = Screen.Feed.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(Screen.Feed.route) {
+            composable(Screen.Feed.route) { backStackEntry ->
+                val pendingBookmarkId by backStackEntry.savedStateHandle
+                    .getStateFlow<String?>("pendingBookmarkId", null)
+                    .collectAsState()
+
                 HomeScreen(
                     onArticleClick = { articleId ->
                         navController.navigate(Screen.ArticleDetail.createRoute(articleId))
+                    },
+                    onSignInRequired = { articleId ->
+                        navController.navigate(Screen.SignInFlow.createRoute(articleId))
+                    },
+                    pendingBookmarkArticleId = pendingBookmarkId,
+                    onPendingBookmarkConsumed = {
+                        backStackEntry.savedStateHandle.remove<String>("pendingBookmarkId")
                     }
                 )
             }
@@ -167,13 +180,16 @@ fun NewsNavigation() {
                 BookmarksScreen(
                     onArticleClick = { articleId ->
                         navController.navigate(Screen.ArticleDetail.createRoute(articleId))
+                    },
+                    onSignInRequired = {
+                        navController.navigate(Screen.SignInFlow.createRoute())
                     }
                 )
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigateToSignIn = {
-                        navController.navigate(Screen.SignInFlow.route)
+                        navController.navigate(Screen.SignInFlow.createRoute())
                     }
                 )
             }
@@ -182,23 +198,41 @@ fun NewsNavigation() {
                 arguments = listOf(
                     navArgument("articleId") { type = NavType.StringType }
                 )
-            ) {
+            ) { backStackEntry ->
+                val pendingBookmarkId by backStackEntry.savedStateHandle
+                    .getStateFlow<String?>("pendingBookmarkId", null)
+                    .collectAsState()
+
                 ArticleDetailScreen(
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStack() },
+                    onSignInRequired = { articleId ->
+                        navController.navigate(Screen.SignInFlow.createRoute(articleId))
+                    },
+                    pendingBookmarkArticleId = pendingBookmarkId,
+                    onPendingBookmarkConsumed = {
+                        backStackEntry.savedStateHandle.remove<String>("pendingBookmarkId")
+                    }
                 )
             }
-            composable(Screen.SignInFlow.route) {
-                val activity = LocalActivity.current as ComponentActivity
-                val viewModel: AuthViewModel = hiltViewModel(viewModelStoreOwner = activity)
-                val authState by viewModel.authState.collectAsState()
-
-                LaunchedEffect(authState) {
-                    if (authState is AuthUiState.SignedIn) {
-                        navController.popBackStack()
+            composable(
+                route = Screen.SignInFlow.route,
+                arguments = listOf(
+                    navArgument("pendingBookmarkId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
                     }
-                }
+                )
+            ) { backStackEntry ->
+                val pendingBookmarkId = backStackEntry.arguments?.getString("pendingBookmarkId")
 
-                AuthNavigation(onAuthSuccess = {})
+                AuthNavigation(onAuthSuccess = {
+                    if (pendingBookmarkId != null) {
+                        navController.previousBackStackEntry?.savedStateHandle
+                            ?.set("pendingBookmarkId", pendingBookmarkId)
+                    }
+                    navController.popBackStack()
+                })
             }
         }
     }

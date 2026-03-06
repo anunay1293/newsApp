@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,7 +29,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -71,17 +75,22 @@ import java.util.Locale
  */
 @Composable
 fun BookmarksScreen(
-    onArticleClick: (String) -> Unit
+    onArticleClick: (String) -> Unit,
+    onSignInRequired: () -> Unit = {}
 ) {
     val viewModel: BookmarksViewModel = hiltViewModel()
+    val isSignedIn by viewModel.isSignedIn.collectAsState()
     val pagedArticles = viewModel.pagedArticles.collectAsLazyPagingItems()
-    
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.recheckAuth()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(20.dp)
     ) {
-        // Header
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.primaryContainer,
@@ -108,9 +117,45 @@ fun BookmarksScreen(
         }
         
         Spacer(modifier = Modifier.height(24.dp))
-        
-        // Article list
+
         Box(modifier = Modifier.weight(1f)) {
+        if (!isSignedIn) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(48.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.bookmarks_sign_in_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.bookmarks_sign_in_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(
+                        onClick = onSignInRequired,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_sign_in),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        } else {
             if (pagedArticles.loadState.refresh is LoadState.Loading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -195,6 +240,7 @@ fun BookmarksScreen(
                     }
                 }
             }
+        }
         }
     }
 }

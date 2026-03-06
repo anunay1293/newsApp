@@ -11,6 +11,7 @@ import com.example.news.domain.usecase.ResendCodeUseCase
 import com.example.news.domain.usecase.SignInUseCase
 import com.example.news.domain.usecase.SignOutUseCase
 import com.example.news.domain.usecase.SignUpUseCase
+import com.example.news.domain.usecase.SyncBookmarksOnSignInUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,7 +42,8 @@ class AuthViewModel @Inject constructor(
     private val confirmSignUpUseCase: ConfirmSignUpUseCase,
     private val resendCodeUseCase: ResendCodeUseCase,
     private val signInUseCase: SignInUseCase,
-    private val signOutUseCase: SignOutUseCase
+    private val signOutUseCase: SignOutUseCase,
+    private val syncBookmarksOnSignInUseCase: SyncBookmarksOnSignInUseCase
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthUiState>(AuthUiState.CheckingSession)
@@ -192,6 +194,7 @@ class AuthViewModel @Inject constructor(
                 is AuthResult.Success -> {
                     _authState.value = AuthUiState.SignedIn
                     _errorMessage.value = null
+                    launch { syncBookmarksOnSignInUseCase() }
                 }
                 is AuthResult.Error -> {
                     _errorMessage.value = result.message

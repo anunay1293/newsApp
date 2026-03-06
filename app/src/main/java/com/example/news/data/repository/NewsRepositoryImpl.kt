@@ -4,8 +4,12 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.map
+import android.util.Log
+import com.example.news.data.api.BookmarkApiService
 import com.example.news.data.api.NewsApiService
+import com.example.news.data.dto.BookmarkDto
 import com.example.news.data.local.ArticleDao
+import com.example.news.data.local.ArticleEntity
 import com.example.news.data.local.BookmarkDao
 import com.example.news.data.local.BookmarkEntity
 import com.example.news.data.mapper.toDomain
@@ -39,11 +43,14 @@ import javax.inject.Inject
  * @param bookmarkDao    DAO for bookmark CRUD, observation, and paged bookmark queries.
  * @param newsApiService The Retrofit API service for fetching news articles from the remote API.
  */
+private const val TAG = "NewsRepositoryImpl"
+
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class NewsRepositoryImpl @Inject constructor(
     private val articleDao: ArticleDao,
     private val bookmarkDao: BookmarkDao,
-    private val newsApiService: NewsApiService
+    private val newsApiService: NewsApiService,
+    private val bookmarkApiService: BookmarkApiService
 ) : NewsRepository {
     
     /** Dedicated IO-bound coroutine scope for bookmark cache refreshes. */
@@ -155,14 +162,25 @@ class NewsRepositoryImpl @Inject constructor(
      */
     override suspend fun toggleBookmark(articleId: String) {
         val existingBookmark = bookmarkDao.getBookmark(articleId)
+        val isNowBookmarked: Boolean
         if (existingBookmark != null) {
             bookmarkDao.deleteBookmark(existingBookmark)
             _bookmarkedIds.value = _bookmarkedIds.value - articleId
+            isNowBookmarked = false
         } else {
             bookmarkDao.insertBookmark(BookmarkEntity(articleId = articleId))
             _bookmarkedIds.value = _bookmarkedIds.value + articleId
+            isNowBookmarked = true
         }
         refreshBookmarkedIds()
+
+        bookmarkScope.launch {
+            try {
+                syncBookmarkToRemote(articleId, isNowBookmarked)
+            } catch (e: Exception) {
+                Log.e(TAG, "Remote bookmark sync failed for $articleId", e)
+            }
+        }
     }
     
     /**
@@ -202,6 +220,61 @@ class NewsRepositoryImpl @Inject constructor(
                     pagingData.map { entity -> entity.toDomain(isBookmarked = true) }
                 }
             }
+    }
+
+    override suspend fun syncBookmarksFromRemote() {
+        try {
+            val response = bookmarkApiService.getBookmarks()
+            val remoteBookmarks = response.bookmarks
+
+            for (dto in remoteBookmarks) {
+                val entity = ArticleEntity(
+                    articleId = dto.articleId,
+                    category = dto.category,
+                    title = dto.title,
+                    author = dto.author,
+                    publishedAt = dto.publishedAt,
+                    url = dto.url,
+                    urlToImage = dto.urlToImage,
+                    sourceName = dto.sourceName,
+                    fetchedAt = System.currentTimeMillis()
+                )
+                articleDao.upsertArticles(listOf(entity))
+            }
+
+            bookmarkDao.deleteAllBookmarks()
+            for (dto in remoteBookmarks) {
+                bookmarkDao.insertBookmark(
+                    BookmarkEntity(articleId = dto.articleId, bookmarkedAt = dto.bookmarkedAt)
+                )
+            }
+
+            refreshBookmarkedIds()
+            Log.d(TAG, "Synced ${remoteBookmarks.size} bookmarks from remote")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync bookmarks from remote", e)
+        }
+    }
+
+    override suspend fun syncBookmarkToRemote(articleId: String, isBookmarked: Boolean) {
+        if (isBookmarked) {
+            val entity = articleDao.getArticleById(articleId) ?: return
+            val bookmark = bookmarkDao.getBookmark(articleId)
+            val dto = BookmarkDto(
+                articleId = entity.articleId,
+                bookmarkedAt = bookmark?.bookmarkedAt ?: System.currentTimeMillis(),
+                title = entity.title,
+                author = entity.author,
+                publishedAt = entity.publishedAt,
+                url = entity.url,
+                urlToImage = entity.urlToImage,
+                sourceName = entity.sourceName,
+                category = entity.category
+            )
+            bookmarkApiService.addBookmark(dto)
+        } else {
+            bookmarkApiService.removeBookmark(articleId)
+        }
     }
 }
 

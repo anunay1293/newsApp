@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -61,11 +62,26 @@ import com.example.news.ui.mapper.toUiModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArticleDetailScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onSignInRequired: (String) -> Unit = {},
+    pendingBookmarkArticleId: String? = null,
+    onPendingBookmarkConsumed: () -> Unit = {}
 ) {
     val viewModel: ArticleDetailViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsState()
     val article = uiState.article?.toUiModel()
+
+    LaunchedEffect(Unit) {
+        viewModel.authRequiredForBookmark.collect { articleId ->
+            onSignInRequired(articleId)
+        }
+    }
+
+    LaunchedEffect(pendingBookmarkArticleId) {
+        val id = pendingBookmarkArticleId ?: return@LaunchedEffect
+        viewModel.handleEvent(ArticleDetailUiEvent.OnBookmarkToggle)
+        onPendingBookmarkConsumed()
+    }
 
     Scaffold(
         topBar = {

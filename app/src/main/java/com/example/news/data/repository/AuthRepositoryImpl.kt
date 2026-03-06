@@ -3,6 +3,7 @@ package com.example.news.data.repository
 import android.util.Log
 import com.amplifyframework.auth.AuthException
 import com.amplifyframework.auth.AuthUserAttributeKey
+import com.amplifyframework.auth.cognito.AWSCognitoAuthSession
 import com.amplifyframework.auth.options.AuthSignUpOptions
 import com.amplifyframework.core.Amplify
 import com.example.news.domain.model.AuthResult
@@ -213,6 +214,37 @@ class AuthRepositoryImpl @Inject constructor() : AuthRepository {
         } catch (e: Exception) {
             Log.e(TAG, "Sign out failed", e)
             AuthResult.Error("Sign out failed: ${e.message}")
+        }
+    }
+
+    override suspend fun getIdToken(): String? {
+        return try {
+            suspendCancellableCoroutine { cont ->
+                Amplify.Auth.fetchAuthSession(
+                    { session ->
+                        val cognitoSession = session as AWSCognitoAuthSession
+                        cont.resume(cognitoSession.userPoolTokensResult.value?.idToken)
+                    },
+                    { cont.resume(null) }
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get ID token", e)
+            null
+        }
+    }
+
+    override suspend fun getUserId(): String? {
+        return try {
+            suspendCancellableCoroutine { cont ->
+                Amplify.Auth.getCurrentUser(
+                    { user -> cont.resume(user.userId) },
+                    { cont.resume(null) }
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get user ID", e)
+            null
         }
     }
 }

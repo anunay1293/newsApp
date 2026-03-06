@@ -7,9 +7,13 @@ import javax.inject.Inject
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.example.news.domain.model.Article
+import com.example.news.domain.repository.AuthRepository
 import com.example.news.domain.usecase.GetPagedBookmarkedArticlesUseCase
 import com.example.news.domain.usecase.ToggleBookmarkUseCase
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -26,18 +30,25 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class BookmarksViewModel @Inject constructor(
     private val getPagedBookmarkedArticlesUseCase: GetPagedBookmarkedArticlesUseCase,
-    private val toggleBookmarkUseCase: ToggleBookmarkUseCase
+    private val toggleBookmarkUseCase: ToggleBookmarkUseCase,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
-    /**
-     * Reactive stream of paged bookmarked domain [Article] objects from Room.
-     *
-     * Cached in [viewModelScope] so the data survives configuration changes. The flow
-     * re-emits whenever the underlying bookmark table changes. The UI layer is
-     * responsible for mapping each [Article] to an [ArticleUiModel] at render time.
-     */
+    private val _isSignedIn = MutableStateFlow(false)
+    val isSignedIn: StateFlow<Boolean> = _isSignedIn.asStateFlow()
+
     val pagedArticles: Flow<PagingData<Article>> = getPagedBookmarkedArticlesUseCase()
         .cachedIn(viewModelScope)
+
+    init {
+        recheckAuth()
+    }
+
+    fun recheckAuth() {
+        viewModelScope.launch {
+            _isSignedIn.value = authRepository.checkSession()
+        }
+    }
 
     /**
      * Central event handler for user interactions on the bookmarks screen.
