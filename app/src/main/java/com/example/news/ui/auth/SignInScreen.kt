@@ -26,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,48 +34,60 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import android.app.Application
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModelProvider
-import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.news.R
+import com.example.news.presentation.auth.AuthUiState
 import com.example.news.presentation.auth.AuthViewModel
 
+/**
+ * Sign-in screen composable where returning users enter their email and password.
+ *
+ * Uses the shared [AuthViewModel] (scoped to the Activity via [hiltViewModel]) to invoke
+ * [AuthViewModel.signIn]. The screen observes [AuthViewModel.isLoading] and
+ * [AuthViewModel.errorMessage] to display a loading spinner on the button and an error
+ * banner respectively. A "Don't have an account? Sign Up" link navigates to the sign-up screen.
+ *
+ * A [LaunchedEffect] watches [AuthViewModel.authState] for two outcomes:
+ *
+ * - [AuthUiState.SignedIn] -- sign-in succeeded; [onSignInSuccess] is invoked.
+ * - [AuthUiState.NeedsConfirmation] -- the account exists but has not been verified;
+ *   [onNavigateToConfirm] is invoked with the email so the user can enter the
+ *   confirmation code.
+ *
+ * @param onNavigateToSignUp  Callback invoked when the user taps the "Sign Up" text button,
+ *                            triggering navigation to [SignUpScreen].
+ * @param onNavigateToConfirm Callback invoked with the user's email when sign-in reveals
+ *                            an unconfirmed account, navigating to the confirmation screen.
+ * @param onSignInSuccess     Callback invoked when authentication succeeds.
+ */
 @Composable
 fun SignInScreen(
-    onNavigateToSignUp: () -> Unit
+    onNavigateToSignUp: () -> Unit,
+    onNavigateToConfirm: (String) -> Unit,
+    onSignInSuccess: () -> Unit = {}
 ) {
-    val application = LocalContext.current.applicationContext as Application
-    val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
-    // Use Activity's ViewModelStoreOwner to share ViewModel instance with AuthGate
-    val viewModel: AuthViewModel = if (activity != null) {
-        androidx.lifecycle.viewmodel.compose.viewModel(
-            viewModelStoreOwner = activity,
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    } else {
-        viewModel(
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    }
+    val activity = LocalActivity.current as androidx.activity.ComponentActivity
+    val viewModel: AuthViewModel = hiltViewModel(viewModelStoreOwner = activity)
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val authState by viewModel.authState.collectAsState()
+
+    LaunchedEffect(authState) {
+        when (authState) {
+            is AuthUiState.SignedIn -> onSignInSuccess()
+            is AuthUiState.NeedsConfirmation ->
+                onNavigateToConfirm((authState as AuthUiState.NeedsConfirmation).email)
+            else -> { /* SignedOut or CheckingSession -- stay on this screen */ }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -94,14 +107,14 @@ fun SignInScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Welcome Back",
+                    text = stringResource(R.string.sign_in_title),
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Sign in to continue",
+                    text = stringResource(R.string.sign_in_subtitle),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                 )
@@ -133,11 +146,11 @@ fun SignInScreen(
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text("Email") },
+                        label = { Text(stringResource(R.string.label_email)) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Email,
-                                contentDescription = "Email",
+                                contentDescription = stringResource(R.string.cd_email),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         },
@@ -154,11 +167,11 @@ fun SignInScreen(
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("Password") },
+                        label = { Text(stringResource(R.string.label_password)) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
-                                contentDescription = "Password",
+                                contentDescription = stringResource(R.string.cd_password),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         },
@@ -207,7 +220,7 @@ fun SignInScreen(
                             )
                         } else {
                             Text(
-                                "Sign In",
+                                stringResource(R.string.action_sign_in),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -221,11 +234,11 @@ fun SignInScreen(
                 modifier = Modifier.padding(top = 8.dp)
             ) {
                 Text(
-                    "Don't have an account? ",
+                    stringResource(R.string.sign_in_prompt),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "Sign Up",
+                    stringResource(R.string.action_sign_up),
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold
                 )

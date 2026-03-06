@@ -1,77 +1,110 @@
 package com.example.news.data.repository
 
-import android.content.Context
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import androidx.paging.map
-import com.example.news.data.api.NewsApiModule
+import android.util.Log
+import com.example.news.data.api.BookmarkApiService
+import com.example.news.data.api.NewsApiService
+import com.example.news.data.dto.BookmarkDto
+import com.example.news.data.local.ArticleDao
+import com.example.news.data.local.ArticleEntity
+import com.example.news.data.local.BookmarkDao
 import com.example.news.data.local.BookmarkEntity
-import com.example.news.data.local.NewsDatabase
+import com.example.news.data.mapper.toDomain
 import com.example.news.data.mapper.toEntity
-import com.example.news.data.mapper.toUiModel
-import com.example.news.ui.model.ArticleUiModel
+import com.example.news.domain.model.Article
+import com.example.news.domain.repository.NewsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
- * Implementation of NewsRepository with Single Source of Truth (SSOT) pattern.
- * UI always reads from Room database via Paging 3.
- * Network is only used to refresh Room in background.
+ * Concrete implementation of [NewsRepository] using the **Single Source of Truth (SSOT)** pattern.
+ *
+ * Architecture overview:
+ * - **Reads** are served exclusively from Room via Paging 3, returning domain [Article] objects.
+ * - **Writes** fetch data from the remote API, map DTOs to entities, and upsert them into Room.
+ *   Room then automatically invalidates the PagingSource so observers pick up changes.
+ * - A separate in-memory [_bookmarkedIds] cache tracks bookmark state without requiring
+ *   a JOIN on every page load.
+ *
+ * All dependencies are provided by Hilt via constructor injection.
+ *
+ * @param articleDao     DAO for article CRUD and paging queries.
+ * @param bookmarkDao    DAO for bookmark CRUD, observation, and paged bookmark queries.
+ * @param newsApiService The Retrofit API service for fetching news articles from the remote API.
  */
+private const val TAG = "NewsRepositoryImpl"
+
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class NewsRepositoryImpl(
-    context: Context,
-    private val newsApiService: com.example.news.data.api.NewsApiService = NewsApiModule.newsApiService
+class NewsRepositoryImpl @Inject constructor(
+    private val articleDao: ArticleDao,
+    private val bookmarkDao: BookmarkDao,
+    private val newsApiService: NewsApiService,
+    private val bookmarkApiService: BookmarkApiService
 ) : NewsRepository {
     
-    private val database = NewsDatabase.getDatabase(context)
-    private val articleDao = database.articleDao()
-    private val bookmarkDao = database.bookmarkDao()
-    
-    // Cache of bookmarked article IDs for efficient lookup (used for feed screen bookmark icons)
+    /** Dedicated IO-bound coroutine scope for bookmark cache refreshes. */
     private val bookmarkScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * In-memory cache of bookmarked article IDs, used by [getPagedArticles] to set the
+     * [ArticleUiModel.isBookmarked] flag without a database JOIN on every page.
+     */
     private val _bookmarkedIds = MutableStateFlow<Set<String>>(emptySet())
     
     init {
-        // Load initial bookmarked IDs asynchronously for feed screen
         bookmarkScope.launch {
             refreshBookmarkedIds()
         }
     }
     
+    /**
+     * Queries all bookmarked article IDs from Room and refreshes the [_bookmarkedIds] cache.
+     * Called on init and after every bookmark toggle to keep the in-memory set current.
+     */
     private suspend fun refreshBookmarkedIds() {
-        // Query all bookmarked article IDs and update cache (for feed screen)
         val bookmarkedIdsList = bookmarkDao.getAllBookmarkedIds()
         _bookmarkedIds.value = bookmarkedIdsList.toSet()
     }
     
-    // Observe bookmarks from Room directly - this ensures all repository instances see the same data
-    // This is used for the bookmarks screen to react to bookmark changes in real-time
+    /**
+     * Reactive flow that observes the bookmark table directly via Room.
+     *
+     * Used by [getPagedBookmarkedArticles] to trigger a new Pager whenever bookmarks
+     * change, ensuring the bookmarks screen always reflects the latest state regardless
+     * of which repository instance performed the mutation.
+     */
     private val bookmarkedIdsFromRoom: Flow<Set<String>> = bookmarkDao.observeAllBookmarkedIds()
         .map { it.toSet() }
         .distinctUntilChanged()
     
-    override fun getPagedArticles(category: String, searchQuery: String): Flow<PagingData<ArticleUiModel>> {
-        // Refresh bookmarked IDs when starting to observe articles
+    /**
+     * Returns a paginated article stream for the given [category] and optional [searchQuery].
+     *
+     * Implementation details:
+     * 1. Refreshes the in-memory bookmark-ID cache so bookmark state is accurate.
+     * 2. Uses [flatMapLatest] on [_bookmarkedIds] so that a new [Pager] is created whenever
+     *    the bookmark set changes, avoiding the "collect twice" error on the same Pager flow.
+     * 3. Maps each [ArticleEntity] to a domain [Article], setting [isBookmarked] from the cache.
+     *
+     * Paging configuration: 20 items per page, 10-item prefetch distance, no placeholders.
+     */
+    override fun getPagedArticles(category: String, searchQuery: String): Flow<PagingData<Article>> {
         bookmarkScope.launch {
             refreshBookmarkedIds()
         }
         
-        // Use flatMapLatest on bookmarkedIds to create a new Pager flow when bookmarks change
-        // This ensures we don't try to collect from the same Pager.flow instance twice
         return _bookmarkedIds.flatMapLatest { bookmarkedSet ->
-            // Create a new Pager each time bookmarks change to avoid "collect twice" error
             val pagingSourceFactory = { articleDao.getPagedArticlesByCategory(category, searchQuery) }
             
             Pager(
@@ -83,63 +116,97 @@ class NewsRepositoryImpl(
                 pagingSourceFactory = pagingSourceFactory
             ).flow.map { pagingData ->
                 pagingData.map { entity -> 
-                    entity.toUiModel(isBookmarked = bookmarkedSet.contains(entity.articleId))
+                    entity.toDomain(isBookmarked = bookmarkedSet.contains(entity.articleId))
                 }
             }
         }
     }
     
+    /**
+     * Fetches the latest articles for [category] from the remote API and persists them to Room.
+     *
+     * Steps:
+     * 1. Call [NewsApiService.getFeed] for the requested category.
+     * 2. Map each [ArticleDto] to an [ArticleEntity], tagging it with [category].
+     * 3. Upsert into Room (insert-or-replace by primary key).
+     * 4. Prune stale articles — keep the 100 most recent per category, but **never** delete
+     *    bookmarked articles regardless of age.
+     *
+     * On any network or parsing failure the exception is caught silently so the UI continues
+     * to display cached data, preserving the SSOT guarantee.
+     */
     override suspend fun refreshArticles(category: String) {
         try {
-            // Fetch from network
             val response = newsApiService.getFeed(category = category)
             val articles = response.articles ?: emptyList()
             
-            // Convert DTOs to entities and upsert to Room
-            // Important: Each entity is tagged with the correct category from the API response
             val entities = articles.map { articleDto ->
                 articleDto.toEntity(category = category)
             }
             
-            // Upsert articles first
             articleDao.upsertArticles(entities)
-            
-            // Clean up old articles (keep only most recent 100 per category)
-            // IMPORTANT: NEVER delete bookmarked articles, regardless of category or age
-            // Use a SQL query that explicitly excludes bookmarked articles from deletion
             articleDao.deleteOldNonBookmarkedArticles(category, keepLimit = 100)
             
         } catch (e: Exception) {
-            // On error, don't throw exception - cached data remains available
-            // UI continues showing cached articles from Room
-            // Error is silently handled to maintain SSOT pattern
+            // Silently swallow – cached data remains available via Room.
         }
     }
     
+    /**
+     * Toggles the bookmark for the article identified by [articleId].
+     *
+     * If a [BookmarkEntity] already exists for this ID it is deleted (un-bookmark);
+     * otherwise a new entity is inserted (bookmark). The in-memory [_bookmarkedIds]
+     * cache is updated **optimistically** for instant UI feedback, then reconciled
+     * with Room to guarantee consistency.
+     */
     override suspend fun toggleBookmark(articleId: String) {
         val existingBookmark = bookmarkDao.getBookmark(articleId)
+        val isNowBookmarked: Boolean
         if (existingBookmark != null) {
-            // Remove bookmark
             bookmarkDao.deleteBookmark(existingBookmark)
-            // Update cache immediately
             _bookmarkedIds.value = _bookmarkedIds.value - articleId
+            isNowBookmarked = false
         } else {
-            // Add bookmark
             bookmarkDao.insertBookmark(BookmarkEntity(articleId = articleId))
-            // Update cache immediately
             _bookmarkedIds.value = _bookmarkedIds.value + articleId
+            isNowBookmarked = true
         }
-        // Also refresh from DB to ensure consistency
         refreshBookmarkedIds()
+
+        bookmarkScope.launch {
+            try {
+                syncBookmarkToRemote(articleId, isNowBookmarked)
+            } catch (e: Exception) {
+                Log.e(TAG, "Remote bookmark sync failed for $articleId", e)
+            }
+        }
     }
     
-    override fun getPagedBookmarkedArticles(): Flow<PagingData<ArticleUiModel>> {
-        // Observe bookmarks directly from Room - this ensures we always see the latest state
-        // regardless of which repository instance we're using
-        // When bookmarks change in Room, this Flow will emit, triggering a new Pager
+    /**
+     * Retrieves a single article by its [articleId] from the local Room database.
+     *
+     * Bookmark state is resolved from the in-memory [_bookmarkedIds] cache so the returned
+     * [Article] reflects the current bookmark status without an extra database query.
+     *
+     * @return The matching [Article] with its bookmark state, or `null` if not found.
+     */
+    override suspend fun getArticleById(articleId: String): Article? {
+        val entity = articleDao.getArticleById(articleId) ?: return null
+        val isBookmarked = _bookmarkedIds.value.contains(articleId)
+        return entity.toDomain(isBookmarked)
+    }
+
+    /**
+     * Returns a paginated stream of all bookmarked articles.
+     *
+     * Observes [bookmarkedIdsFromRoom] and uses [flatMapLatest] to create a fresh [Pager]
+     * each time the bookmark table changes. Every entity returned by the bookmark JOIN query
+     * is mapped with `isBookmarked = true` since, by definition, all results are bookmarked.
+     */
+    override fun getPagedBookmarkedArticles(): Flow<PagingData<Article>> {
         return bookmarkedIdsFromRoom
             .flatMapLatest {
-                // Create a new Pager each time bookmarks change to ensure fresh data
                 val pagingSourceFactory = { bookmarkDao.getPagedBookmarkedArticles() }
                 
                 Pager(
@@ -150,14 +217,85 @@ class NewsRepositoryImpl(
                     ),
                     pagingSourceFactory = pagingSourceFactory
                 ).flow.map { pagingData -> 
-                    // All articles from bookmarks query are bookmarked
-                    pagingData.map { entity -> entity.toUiModel(isBookmarked = true) }
+                    pagingData.map { entity -> entity.toDomain(isBookmarked = true) }
                 }
             }
+    }
+
+    override suspend fun syncBookmarksFromRemote() {
+        try {
+            val response = bookmarkApiService.getBookmarks()
+            val remoteBookmarks = response.bookmarks
+
+            for (dto in remoteBookmarks) {
+                val entity = ArticleEntity(
+                    articleId = dto.articleId,
+                    category = dto.category,
+                    title = dto.title,
+                    author = dto.author,
+                    publishedAt = dto.publishedAt,
+                    url = dto.url,
+                    urlToImage = dto.urlToImage,
+                    sourceName = dto.sourceName,
+                    fetchedAt = System.currentTimeMillis()
+                )
+                articleDao.upsertArticles(listOf(entity))
+            }
+
+            bookmarkDao.deleteAllBookmarks()
+            for (dto in remoteBookmarks) {
+                bookmarkDao.insertBookmark(
+                    BookmarkEntity(articleId = dto.articleId, bookmarkedAt = dto.bookmarkedAt)
+                )
+            }
+
+            refreshBookmarkedIds()
+            Log.d(TAG, "Synced ${remoteBookmarks.size} bookmarks from remote")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync bookmarks from remote", e)
+        }
+    }
+
+    /**
+     * Deletes all rows from the local bookmarks table and resets [_bookmarkedIds] to an
+     * empty set. The empty set triggers [flatMapLatest] in [getPagedArticles], causing
+     * the feed to re-emit all articles with `isBookmarked = false`.
+     */
+    override suspend fun clearLocalBookmarks() {
+        bookmarkDao.deleteAllBookmarks()
+        refreshBookmarkedIds()
+    }
+
+    override suspend fun syncBookmarkToRemote(articleId: String, isBookmarked: Boolean) {
+        if (isBookmarked) {
+            val entity = articleDao.getArticleById(articleId) ?: return
+            val bookmark = bookmarkDao.getBookmark(articleId)
+            val dto = BookmarkDto(
+                articleId = entity.articleId,
+                bookmarkedAt = bookmark?.bookmarkedAt ?: System.currentTimeMillis(),
+                title = entity.title,
+                author = entity.author,
+                publishedAt = entity.publishedAt,
+                url = entity.url,
+                urlToImage = entity.urlToImage,
+                sourceName = entity.sourceName,
+                category = entity.category
+            )
+            bookmarkApiService.addBookmark(dto)
+        } else {
+            bookmarkApiService.removeBookmark(articleId)
+        }
     }
 }
 
 /**
- * Exception thrown when repository operations fail.
+ * Custom exception type for repository-level failures.
+ *
+ * Currently unused at runtime (errors are swallowed to preserve the SSOT guarantee),
+ * but available for future use in cases where callers need to distinguish repository
+ * errors from other exception types.
+ *
+ * @param message Human-readable description of the failure.
+ * @param cause   Optional underlying throwable that triggered this exception.
  */
 class NewsRepositoryException(message: String, cause: Throwable? = null) : Exception(message, cause)

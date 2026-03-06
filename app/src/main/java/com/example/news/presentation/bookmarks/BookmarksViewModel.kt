@@ -1,33 +1,58 @@
 package com.example.news.presentation.bookmarks
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.example.news.data.repository.NewsRepository
-import com.example.news.data.repository.NewsRepositoryImpl
-import com.example.news.ui.model.ArticleUiModel
+import com.example.news.domain.model.Article
+import com.example.news.domain.repository.AuthRepository
+import com.example.news.domain.usecase.GetPagedBookmarkedArticlesUseCase
+import com.example.news.domain.usecase.ToggleBookmarkUseCase
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel for BookmarksScreen.
- * Observes bookmarked articles from Room via Paging 3.
+ * ViewModel for the bookmarks screen.
+ *
+ * Provides a paginated stream of bookmarked articles sourced from the Room database
+ * via [GetPagedBookmarkedArticlesUseCase]. When the user removes a bookmark, the
+ * underlying PagingSource is invalidated by the repository, so the list automatically
+ * refreshes without manual intervention.
+ *
+ * @param getPagedBookmarkedArticlesUseCase Use case for observing paginated bookmarks from Room.
+ * @param toggleBookmarkUseCase            Use case for toggling an article's bookmark state.
  */
-class BookmarksViewModel(
-    application: Application,
-    private val repository: NewsRepository = NewsRepositoryImpl(application.applicationContext)
-) : AndroidViewModel(application) {
-    
-    /**
-     * Get paged bookmarked articles from Room.
-     * Cached in ViewModelScope for configuration changes.
-     */
-    val pagedArticles: Flow<PagingData<ArticleUiModel>> = repository
-        .getPagedBookmarkedArticles()
+@HiltViewModel
+class BookmarksViewModel @Inject constructor(
+    private val getPagedBookmarkedArticlesUseCase: GetPagedBookmarkedArticlesUseCase,
+    private val toggleBookmarkUseCase: ToggleBookmarkUseCase,
+    private val authRepository: AuthRepository
+) : ViewModel() {
+
+    private val _isSignedIn = MutableStateFlow(false)
+    val isSignedIn: StateFlow<Boolean> = _isSignedIn.asStateFlow()
+
+    val pagedArticles: Flow<PagingData<Article>> = getPagedBookmarkedArticlesUseCase()
         .cachedIn(viewModelScope)
-    
+
+    init {
+        recheckAuth()
+    }
+
+    fun recheckAuth() {
+        viewModelScope.launch {
+            _isSignedIn.value = authRepository.checkSession()
+        }
+    }
+
+    /**
+     * Central event handler for user interactions on the bookmarks screen.
+     */
     fun handleEvent(event: BookmarksUiEvent) {
         when (event) {
             is BookmarksUiEvent.OnBookmarkToggle -> {
@@ -35,12 +60,10 @@ class BookmarksViewModel(
             }
         }
     }
-    
+
     private fun toggleBookmark(articleId: String) {
         viewModelScope.launch {
-            repository.toggleBookmark(articleId)
-            // Bookmark state will automatically update via Flow when PagingSource invalidates
+            toggleBookmarkUseCase(articleId)
         }
     }
 }
-

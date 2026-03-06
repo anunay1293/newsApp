@@ -23,52 +23,56 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import android.app.Application
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModelProvider
-import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.news.R
 import com.example.news.presentation.auth.AuthUiState
 import com.example.news.presentation.auth.AuthViewModel
 
+/**
+ * Email confirmation screen composable shown after a new user registers or when a
+ * sign-in attempt reveals an unconfirmed account.
+ *
+ * Displays the target [email] and an input field for the 6-digit confirmation code.
+ * On submission, [AuthViewModel.confirmSignUp] is called via the shared [AuthViewModel]
+ * (scoped to the Activity via [hiltViewModel]). A [LaunchedEffect] watches
+ * [AuthViewModel.authState] for two possible outcomes:
+ *
+ * - [AuthUiState.SignedIn] -- auto sign-in after confirmation succeeded; [onAuthSuccess]
+ *   is invoked to complete the auth flow and return the user to the main app.
+ * - [AuthUiState.SignedOut] -- auto sign-in failed (e.g. network error); [onNavigateToSignIn]
+ *   is invoked as a fallback so the user can sign in manually.
+ *
+ * A "Resend Code" button allows the user to request a fresh verification code via
+ * [AuthViewModel.resendCode].
+ *
+ * @param email              The email address that requires verification, passed as a
+ *                           navigation argument.
+ * @param onAuthSuccess      Callback invoked when confirmation and auto sign-in both
+ *                           succeed, completing the authentication flow.
+ * @param onNavigateToSignIn Fallback callback invoked when confirmation succeeds but
+ *                           auto sign-in fails, navigating to the sign-in screen.
+ */
 @Composable
 fun ConfirmScreen(
     email: String,
+    onAuthSuccess: () -> Unit,
     onNavigateToSignIn: () -> Unit
 ) {
-    val application = LocalContext.current.applicationContext as Application
-    val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
-    // Use Activity's ViewModelStoreOwner to share ViewModel instance with AuthGate
-    val viewModel: AuthViewModel = if (activity != null) {
-        androidx.lifecycle.viewmodel.compose.viewModel(
-            viewModelStoreOwner = activity,
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    } else {
-        viewModel(
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    }
+    val activity = LocalActivity.current as androidx.activity.ComponentActivity
+    val viewModel: AuthViewModel = hiltViewModel(viewModelStoreOwner = activity)
     var confirmationCode by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val authState by viewModel.authState.collectAsState()
 
     LaunchedEffect(authState) {
-        if (authState is AuthUiState.SignedOut) {
-            // Confirmation successful, navigate to sign in
-            onNavigateToSignIn()
+        when (authState) {
+            is AuthUiState.SignedIn -> onAuthSuccess()
+            is AuthUiState.SignedOut -> onNavigateToSignIn()
+            else -> { /* NeedsConfirmation or CheckingSession -- stay on this screen */ }
         }
     }
 
@@ -80,13 +84,13 @@ fun ConfirmScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Confirm Email",
+            text = stringResource(R.string.confirm_title),
             style = MaterialTheme.typography.headlineLarge,
             modifier = Modifier.padding(bottom = 32.dp)
         )
 
         Text(
-            text = "Enter the confirmation code sent to:",
+            text = stringResource(R.string.confirm_instruction),
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -101,7 +105,7 @@ fun ConfirmScreen(
         OutlinedTextField(
             value = confirmationCode,
             onValueChange = { confirmationCode = it },
-            label = { Text("Confirmation Code") },
+            label = { Text(stringResource(R.string.label_confirmation_code)) },
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
             singleLine = true
@@ -132,7 +136,7 @@ fun ConfirmScreen(
                     color = MaterialTheme.colorScheme.onPrimary
                 )
             } else {
-                Text("Confirm")
+                Text(stringResource(R.string.action_confirm))
             }
         }
 
@@ -142,7 +146,7 @@ fun ConfirmScreen(
             onClick = { viewModel.resendCode(email) },
             enabled = !isLoading
         ) {
-            Text("Resend Code")
+            Text(stringResource(R.string.action_resend_code))
         }
     }
 }

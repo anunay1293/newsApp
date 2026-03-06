@@ -2,15 +2,25 @@ package com.example.news.data.mapper
 
 import com.example.news.data.dto.ArticleDto
 import com.example.news.data.local.ArticleEntity
-import com.example.news.ui.model.ArticleUiModel
+import com.example.news.domain.model.Article
 import java.security.MessageDigest
 import java.util.UUID
 
 /**
- * Maps ArticleDto (from API) to ArticleEntity (for Room storage).
+ * Maps an [ArticleDto] (raw API response) to an [ArticleEntity] (Room table row).
+ *
+ * A stable, deterministic [ArticleEntity.articleId] is generated from the article's URL
+ * via SHA-256 hashing, ensuring the same article always maps to the same primary key
+ * (critical for upsert / deduplication logic in Room). If the URL is `null` a random UUID
+ * is used as a fallback.
+ *
+ * Null/blank fields are replaced with sensible defaults so Room columns are never empty.
+ *
+ * @param category The news category tag to attach to this entity (e.g., "technology"),
+ *                 used for category-based Room queries.
+ * @return A fully populated [ArticleEntity] ready for database insertion.
  */
 fun ArticleDto.toEntity(category: String): ArticleEntity {
-    // Generate stable articleId from URL using SHA-256 hash
     val articleId = url?.let { generateArticleId(it) } ?: UUID.randomUUID().toString()
     
     return ArticleEntity(
@@ -27,14 +37,19 @@ fun ArticleDto.toEntity(category: String): ArticleEntity {
 }
 
 /**
- * Maps ArticleEntity (from Room) to ArticleUiModel (for UI).
- * @param isBookmarked whether this article is currently bookmarked
+ * Maps an [ArticleEntity] (Room table row) to a domain [Article].
+ *
+ * Parses the stored ISO 8601 [publishedAt] string into a Unix-epoch millisecond timestamp
+ * and applies the same null/blank-handling defaults as the DTO mapper.
+ *
+ * @param isBookmarked Whether the current user has bookmarked this article. Defaults to
+ *                     `false`; the repository sets this based on the bookmark cache.
+ * @return A domain-layer [Article] instance.
  */
-fun ArticleEntity.toUiModel(isBookmarked: Boolean = false): ArticleUiModel {
-    // Parse published date (ISO 8601 format)
+fun ArticleEntity.toDomain(isBookmarked: Boolean = false): Article {
     val publishedDate = parsePublishedDate(publishedAt)
     
-    return ArticleUiModel(
+    return Article(
         id = articleId,
         title = title,
         author = author.takeIf { it.isNotBlank() } ?: "Unknown",
@@ -46,7 +61,14 @@ fun ArticleEntity.toUiModel(isBookmarked: Boolean = false): ArticleUiModel {
 }
 
 /**
- * Generates a stable article ID from URL using SHA-256 hash.
+ * Generates a deterministic article identifier from the given [url] using SHA-256 hashing.
+ *
+ * The full 64-character hex digest is used as the ID, ensuring uniqueness and stability
+ * across app sessions. If SHA-256 is unavailable (should never happen on Android), the
+ * function falls back to [String.hashCode].
+ *
+ * @param url The article's canonical URL.
+ * @return A hex-encoded SHA-256 hash string, or the hash-code string on failure.
  */
 private fun generateArticleId(url: String): String {
     return try {
@@ -60,8 +82,13 @@ private fun generateArticleId(url: String): String {
 }
 
 /**
- * Parses ISO 8601 date string to Unix timestamp in milliseconds.
- * Returns current time if parsing fails.
+ * Parses an ISO 8601 date string into a Unix-epoch millisecond timestamp.
+ *
+ * Supports multiple common variants (with/without milliseconds, 'Z' suffix vs. numeric
+ * offset). Returns [System.currentTimeMillis] if the input is null, blank, or unparseable.
+ *
+ * @param dateString The ISO 8601 date string to parse, e.g., `"2025-02-23T14:30:00Z"`.
+ * @return Parsed timestamp in milliseconds, or current time as a fallback.
  */
 private fun parsePublishedDate(dateString: String?): Long {
     if (dateString == null || dateString.isBlank()) {

@@ -1,0 +1,261 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Bookmark sync infrastructure -- DynamoDB, Lambda, HTTP API with Cognito JWT auth
+
+Parameters:
+  CognitoUserPoolId:
+    Type: String
+    Default: us-east-1_7z1XPo7l5
+  CognitoAppClientId:
+    Type: String
+    Default: 540mtl0k1t0h8qppra643u6qvu
+
+Resources:
+
+  BookmarksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: articleId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: articleId
+          KeyType: RANGE
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBBookmarks
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource: !GetAtt BookmarksTable.Arn
+
+  GetBookmarksFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: newsapp-getBookmarks
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BookmarksTable
+      Code:
+        ZipFile: |
+          const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+          const { QueryCommand, DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+          const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+          exports.handler = async (event) => {
+            const userId = event.requestContext.authorizer.jwt.claims.sub;
+            const result = await client.send(new QueryCommand({
+              TableName: process.env.TABLE_NAME,
+              KeyConditionExpression: "userId = :uid",
+              ExpressionAttributeValues: { ":uid": userId }
+            }));
+            return {
+              statusCode: 200,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ bookmarks: result.Items })
+            };
+          };
+
+  AddBookmarkFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: newsapp-addBookmark
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BookmarksTable
+      Code:
+        ZipFile: |
+          const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+          const { PutCommand, DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+          const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+          exports.handler = async (event) => {
+            const userId = event.requestContext.authorizer.jwt.claims.sub;
+            const body = JSON.parse(event.body);
+            await client.send(new PutCommand({
+              TableName: process.env.TABLE_NAME,
+              Item: { userId, ...body }
+            }));
+            return {
+              statusCode: 200,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ success: true })
+            };
+          };
+
+  RemoveBookmarkFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: newsapp-removeBookmark
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BookmarksTable
+      Code:
+        ZipFile: |
+          const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+          const { DeleteCommand, DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+          const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+          exports.handler = async (event) => {
+            const userId = event.requestContext.authorizer.jwt.claims.sub;
+            const articleId = event.pathParameters.articleId;
+            await client.send(new DeleteCommand({
+              TableName: process.env.TABLE_NAME,
+              Key: { userId, articleId }
+            }));
+            return {
+              statusCode: 200,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ success: true })
+            };
+          };
+
+  BookmarkApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: newsapp-bookmarks-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowMethods:
+          - GET
+          - POST
+          - DELETE
+          - OPTIONS
+        AllowOrigins:
+          - '*'
+
+  CognitoAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref BookmarkApi
+      AuthorizerType: JWT
+      Name: CognitoJwtAuthorizer
+      IdentitySource:
+        - '$request.header.Authorization'
+      JwtConfiguration:
+        Audience:
+          - !Ref CognitoAppClientId
+        Issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPoolId}
+
+  GetBookmarksIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BookmarkApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetBookmarksFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+
+  AddBookmarkIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BookmarkApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt AddBookmarkFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+
+  RemoveBookmarkIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BookmarkApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt RemoveBookmarkFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+
+  GetBookmarksRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BookmarkApi
+      RouteKey: GET /bookmarks
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub integrations/${GetBookmarksIntegration}
+
+  AddBookmarkRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BookmarkApi
+      RouteKey: POST /bookmarks
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub integrations/${AddBookmarkIntegration}
+
+  RemoveBookmarkRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BookmarkApi
+      RouteKey: DELETE /bookmarks/{articleId}
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub integrations/${RemoveBookmarkIntegration}
+
+  DefaultStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref BookmarkApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  GetBookmarksPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetBookmarksFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BookmarkApi}/*/*/bookmarks
+
+  AddBookmarkPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AddBookmarkFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BookmarkApi}/*/*/bookmarks
+
+  RemoveBookmarkPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RemoveBookmarkFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BookmarkApi}/*/*/bookmarks/*
+
+Outputs:
+  BookmarkApiUrl:
+    Description: Base URL for the bookmark API
+    Value: !GetAtt BookmarkApi.ApiEndpoint
+  TableName:
+    Description: DynamoDB table name
+    Value: !Ref BookmarksTable

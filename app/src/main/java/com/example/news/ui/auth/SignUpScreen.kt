@@ -33,47 +33,39 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import androidx.lifecycle.viewmodel.compose.viewModel
-import android.app.Application
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModelProvider
-import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.news.R
 import com.example.news.presentation.auth.AuthUiState
 import com.example.news.presentation.auth.AuthViewModel
 
+/**
+ * Sign-up screen composable where new users create an account.
+ *
+ * After the user submits their email and password, [AuthViewModel.signUp] is called via
+ * the shared [AuthViewModel] (scoped to the Activity via [hiltViewModel]).
+ * A [LaunchedEffect] observes [AuthViewModel.authState] and navigates to the confirmation
+ * screen when the state transitions to [AuthUiState.NeedsConfirmation]. A short delay is
+ * introduced before navigation to ensure state stability.
+ *
+ * @param onNavigateToConfirm Callback invoked with the user's email when sign-up succeeds
+ *                            and email confirmation is required.
+ * @param onNavigateToSignIn  Callback invoked when the user taps "Already have an account?
+ *                            Sign In" to return to the sign-in screen.
+ */
 @Composable
 fun SignUpScreen(
     onNavigateToConfirm: (String) -> Unit,
     onNavigateToSignIn: () -> Unit
 ) {
-    val application = LocalContext.current.applicationContext as Application
-    val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
-    // Use Activity's ViewModelStoreOwner to share ViewModel instance with AuthGate
-    val viewModel: AuthViewModel = if (activity != null) {
-        androidx.lifecycle.viewmodel.compose.viewModel(
-            viewModelStoreOwner = activity,
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    } else {
-        viewModel(
-            factory = object : ViewModelProvider.Factory {
-                @Suppress("UNCHECKED_CAST")
-                override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                    return AuthViewModel(application) as T
-                }
-            }
-        )
-    }
+    val activity = LocalActivity.current as androidx.activity.ComponentActivity
+    val viewModel: AuthViewModel = hiltViewModel(viewModelStoreOwner = activity)
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()
@@ -117,14 +109,14 @@ fun SignUpScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Create Account",
+                    text = stringResource(R.string.sign_up_title),
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Join us to get started",
+                    text = stringResource(R.string.sign_up_subtitle),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                 )
@@ -156,11 +148,11 @@ fun SignUpScreen(
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text("Email") },
+                        label = { Text(stringResource(R.string.label_email)) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Email,
-                                contentDescription = "Email",
+                                contentDescription = stringResource(R.string.cd_email),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         },
@@ -177,11 +169,11 @@ fun SignUpScreen(
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("Password") },
+                        label = { Text(stringResource(R.string.label_password)) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
-                                contentDescription = "Password",
+                                contentDescription = stringResource(R.string.cd_password),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         },
@@ -230,7 +222,7 @@ fun SignUpScreen(
                             )
                         } else {
                             Text(
-                                "Create Account",
+                                stringResource(R.string.action_create_account),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -244,11 +236,11 @@ fun SignUpScreen(
                 modifier = Modifier.padding(top = 8.dp)
             ) {
                 Text(
-                    "Already have an account? ",
+                    stringResource(R.string.sign_up_prompt),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "Sign In",
+                    stringResource(R.string.action_sign_in),
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold
                 )

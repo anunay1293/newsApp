@@ -1,3 +1,80 @@
 <resources>
     <string name="app_name">News</string>
+
+    <!-- Home Screen -->
+    <string name="home_title">News App</string>
+    <string name="home_subtitle">Stay updated with the latest news</string>
+    <string name="label_category">Category</string>
+    <string name="dropdown_arrow">▼</string>
+    <string name="label_search_articles">Search Articles</string>
+    <string name="search_placeholder">Search by title, author, or source…</string>
+    <string name="cd_search">Search</string>
+    <string name="cd_clear_search">Clear search</string>
+    <string name="error_title">Oops! Something went wrong</string>
+    <string name="error_unknown">Unknown error</string>
+    <string name="action_retry">Retry</string>
+    <string name="error_loading_more">Error loading more: %1$s</string>
+    <string name="empty_no_articles">No articles found</string>
+    <string name="empty_adjust_search">Try adjusting your search terms</string>
+    <string name="empty_check_later">Check back later for updates</string>
+    <string name="loading_articles">Loading articles…</string>
+    <string name="refreshing">Refreshing…</string>
+    <string name="pull_to_refresh">Pull to refresh</string>
+    <string name="cd_pull_to_refresh_arrow">Pull to refresh arrow</string>
+
+    <!-- Shared / Article Card -->
+    <string name="cd_remove_bookmark">Remove bookmark</string>
+    <string name="cd_add_bookmark">Add bookmark</string>
+    <string name="author_unknown">Unknown</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_subtitle">Manage your app preferences</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_signed_in_as">Signed in as %1$s</string>
+    <string name="action_sign_out">Sign Out</string>
+    <string name="cd_sign_out">Sign Out</string>
+    <string name="cd_sign_in">Sign In</string>
+
+    <!-- Sign In Screen -->
+    <string name="sign_in_title">Welcome Back</string>
+    <string name="sign_in_subtitle">Sign in to continue</string>
+    <string name="label_email">Email</string>
+    <string name="label_password">Password</string>
+    <string name="cd_email">Email</string>
+    <string name="cd_password">Password</string>
+    <string name="action_sign_in">Sign In</string>
+    <string name="sign_in_prompt">Don\'t have an account? </string>
+    <string name="action_sign_up">Sign Up</string>
+
+    <!-- Sign Up Screen -->
+    <string name="sign_up_title">Create Account</string>
+    <string name="sign_up_subtitle">Join us to get started</string>
+    <string name="action_create_account">Create Account</string>
+    <string name="sign_up_prompt">Already have an account? </string>
+
+    <!-- Confirm Screen -->
+    <string name="confirm_title">Confirm Email</string>
+    <string name="confirm_instruction">Enter the confirmation code sent to:</string>
+    <string name="label_confirmation_code">Confirmation Code</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="action_resend_code">Resend Code</string>
+
+    <!-- Article Detail Screen -->
+    <string name="cd_navigate_back">Navigate back</string>
+    <string name="error_article_not_found">Article not found</string>
+
+    <!-- Bookmarks Screen -->
+    <string name="bookmarks_title">Bookmarks</string>
+    <string name="bookmarks_subtitle">Your saved articles</string>
+    <string name="loading_bookmarks">Loading bookmarks…</string>
+    <string name="empty_no_bookmarks">No bookmarks yet</string>
+    <string name="empty_bookmark_hint">Bookmark articles to read them later</string>
+    <string name="bookmarks_sign_in_title">Sign in to view bookmarks</string>
+    <string name="bookmarks_sign_in_subtitle">Your saved articles will appear here once you sign in</string>
+
+    <!-- Navigation Tabs -->
+    <string name="tab_feed">Feed</string>
+    <string name="tab_bookmarks">Bookmarks</string>
+    <string name="tab_settings">Settings</string>
 </resources>

@@ -8,7 +8,12 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 /**
- * DAO for article database operations.
+ * Data Access Object for the `articles` table.
+ *
+ * Provides CRUD, paging, and cleanup operations for locally cached news articles.
+ * All read operations return either a Paging 3 [PagingSource] (for paginated UI lists)
+ * or a reactive [Flow] (for real-time observation). Write operations are `suspend`
+ * functions executed on a background dispatcher by Room.
  */
 @Dao
 interface ArticleDao {
@@ -91,5 +96,14 @@ interface ArticleDao {
         )
     """)
     suspend fun deleteOldNonBookmarkedArticles(category: String, keepLimit: Int)
+
+    /**
+     * Retrieves a single article by its unique [articleId].
+     * Used by the article detail screen to load full article data from the local cache.
+     *
+     * @return The matching [ArticleEntity], or `null` if no article with that ID exists.
+     */
+    @Query("SELECT * FROM articles WHERE articleId = :articleId")
+    suspend fun getArticleById(articleId: String): ArticleEntity?
 }
 

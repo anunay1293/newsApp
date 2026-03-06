@@ -1,141 +1,172 @@
 package com.example.news.presentation.home
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.example.news.data.repository.NewsRepository
-import com.example.news.data.repository.NewsRepositoryImpl
-import com.example.news.ui.model.ArticleUiModel
+import com.example.news.domain.model.Article
+import com.example.news.domain.model.BookmarkToggleResult
+import com.example.news.domain.usecase.AuthAwareToggleBookmarkUseCase
+import com.example.news.domain.usecase.GetPagedArticlesUseCase
+import com.example.news.domain.usecase.RefreshArticlesUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel for HomeScreen.
- * Implements SSOT pattern: observes Room PagingData for articles, refreshes network in background.
+ * ViewModel for the home / news-feed screen.
+ *
+ * Implements the **Single Source of Truth (SSOT)** pattern via domain use cases:
+ * - The UI always reads articles from the local Room database via Paging 3.
+ * - Network requests are fired in the background to refresh Room; Room then notifies the
+ *   PagingData observers automatically.
+ *
+ * Key responsibilities:
+ * 1. Category selection -- switches the Room query and triggers a background refresh.
+ * 2. Search -- filters the Room-backed PagingData by title, author, or source name.
+ * 3. Bookmark toggling -- delegates to [ToggleBookmarkUseCase] and relies on PagingSource
+ *    invalidation to refresh bookmark icons.
+ * 4. Error / retry -- surfaces network errors and allows the user to retry a failed refresh.
+ * 5. Pull-to-refresh -- user-initiated refresh via a swipe gesture, tracked by a dedicated
+ *    [HomeUiState.isPullRefreshing] flag to avoid showing the pull indicator during
+ *    automatic background refreshes.
+ *
+ * @param getPagedArticlesUseCase  Use case for observing paginated articles from Room.
+ * @param refreshArticlesUseCase   Use case for fetching fresh articles from the remote API.
+ * @param toggleBookmarkUseCase    Use case for toggling an article's bookmark state.
  */
+@HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
-class HomeViewModel(
-    application: Application,
-    private val repository: NewsRepository = NewsRepositoryImpl(application.applicationContext)
-) : AndroidViewModel(application) {
-    
+class HomeViewModel @Inject constructor(
+    private val getPagedArticlesUseCase: GetPagedArticlesUseCase,
+    private val refreshArticlesUseCase: RefreshArticlesUseCase,
+    private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase
+) : ViewModel() {
+
     private val _uiState = MutableStateFlow(HomeUiState())
+
+    private val _authRequiredChannel = Channel<String>(Channel.BUFFERED)
+    val authRequiredForBookmark: Flow<String> = _authRequiredChannel.receiveAsFlow()
+
+    /** Observable UI state consumed by the home screen composable. */
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-    
+
     /**
-     * Get paged articles for current category and search query.
-     * This Flow is reactive to category and search query changes via uiState StateFlow.
-     * Cached in ViewModelScope for configuration changes.
+     * Reactive stream of paged domain [Article] objects from the Room database.
+     *
+     * Re-emits a new [PagingData] whenever [HomeUiState.selectedCategory] or
+     * [HomeUiState.searchQuery] changes, using [flatMapLatest] to cancel stale queries.
+     * The resulting flow is cached in [viewModelScope] to survive configuration changes.
+     * The UI layer is responsible for mapping each [Article] to an [ArticleUiModel] at
+     * render time.
      */
-    val pagedArticles: Flow<PagingData<ArticleUiModel>> = _uiState
-        .distinctUntilChanged { old, new -> 
+    val pagedArticles: Flow<PagingData<Article>> = _uiState
+        .distinctUntilChanged { old, new ->
             old.selectedCategory == new.selectedCategory && old.searchQuery == new.searchQuery
         }
         .flatMapLatest { state ->
-            repository.getPagedArticles(state.selectedCategory, state.searchQuery)
+            getPagedArticlesUseCase(state.selectedCategory, state.searchQuery)
                 .cachedIn(viewModelScope)
         }
-    
+
     private var currentCategory = "general"
-    
-    // Track the refresh job to cancel it when switching categories
+
     private var refreshJob: Job? = null
-    
+
     init {
-        // Start observing default category on init
         observeCategory("general")
     }
-    
+
+    /**
+     * Central event handler for all user interactions on the home screen.
+     *
+     * Dispatches each [HomeUiEvent] to the appropriate internal handler method, keeping
+     * the composable layer free of business logic.
+     */
     fun handleEvent(event: HomeUiEvent) {
         when (event) {
             is HomeUiEvent.OnCategorySelected -> {
                 observeCategory(event.category)
             }
             is HomeUiEvent.OnSearchQueryChanged -> {
-                // Update search query in state - this will trigger pagedArticles Flow update
                 _uiState.value = _uiState.value.copy(searchQuery = event.searchQuery)
             }
             is HomeUiEvent.OnBookmarkToggle -> {
-                toggleBookmark(event.articleId)
+                toggleBookmark(event.articleId, event.isCurrentlyBookmarked)
             }
             is HomeUiEvent.OnRetryClicked -> {
                 refreshCurrentCategory()
             }
+            is HomeUiEvent.OnPullToRefresh -> {
+                pullToRefresh()
+            }
         }
     }
-    
-    private fun toggleBookmark(articleId: String) {
+
+    private fun toggleBookmark(articleId: String, isCurrentlyBookmarked: Boolean) {
         viewModelScope.launch {
-            repository.toggleBookmark(articleId)
-            // Bookmark state will automatically update via Flow when PagingSource invalidates
+            val result = authAwareToggleBookmarkUseCase(articleId, isCurrentlyBookmarked)
+            if (result is BookmarkToggleResult.AuthRequired) {
+                _authRequiredChannel.send(result.articleId)
+            }
         }
     }
-    
+
     /**
-     * Observes articles for a category from Room (SSOT).
-     * Also triggers background refresh.
-     * The pagedArticles Flow will automatically update when selectedCategory changes.
+     * Switches the active news category and begins observing articles for it.
+     *
+     * Steps performed:
+     * 1. Cancel any in-flight network refresh for the previous category.
+     * 2. Update [HomeUiState.selectedCategory], which triggers [pagedArticles] to re-query Room.
+     * 3. Kick off a background network refresh so Room receives the latest articles.
      */
     private fun observeCategory(category: String) {
-        // Cancel previous refresh job to prevent stale updates
         refreshJob?.cancel()
-        
+
         currentCategory = category
-        
-        // Update selected category immediately
-        // This will trigger pagedArticles Flow to switch to the new category
+
         _uiState.value = _uiState.value.copy(
             selectedCategory = category,
             isRefreshing = false,
             errorMessage = null
         )
-        
-        // Refresh from network in background (doesn't block UI)
+
         refreshCategory(category)
     }
-    
-    /**
-     * Refreshes articles for current category from network.
-     */
+
     private fun refreshCurrentCategory() {
         refreshCategory(currentCategory)
     }
-    
+
     /**
-     * Refreshes articles for a category from network.
-     * Runs in background and updates Room, which automatically notifies PagingData observers.
+     * Fetches fresh articles for [category] from the remote API via [RefreshArticlesUseCase]
+     * and upserts them into Room.
+     *
+     * While the refresh is in progress, [HomeUiState.isRefreshing] is `true`. On failure
+     * the error is surfaced via [HomeUiState.errorMessage]; the cached data in Room
+     * remains available to the user.
      */
     private fun refreshCategory(category: String) {
-        // Cancel previous refresh job
         refreshJob?.cancel()
-        
-        // Store the refresh job so we can cancel it if needed
+
         refreshJob = viewModelScope.launch {
             try {
-                // Set refreshing state (non-blocking indicator)
                 if (currentCategory == category) {
                     _uiState.value = _uiState.value.copy(isRefreshing = true)
                 }
-                
-                repository.refreshArticles(category)
-                
-                // Refreshing will be turned off after a short delay or when PagingData updates
-                // Room updates will automatically trigger PagingSource invalidation
-                
+
+                refreshArticlesUseCase(category)
             } catch (e: Exception) {
-                // This shouldn't happen as repository doesn't throw on refresh error
-                // But handle it just in case
-                // Only update error if this is still the current category
                 if (currentCategory == category) {
                     _uiState.value = _uiState.value.copy(
                         isRefreshing = false,
@@ -143,10 +174,32 @@ class HomeViewModel(
                     )
                 }
             } finally {
-                // Turn off refreshing indicator after refresh completes
                 if (currentCategory == category) {
                     _uiState.value = _uiState.value.copy(isRefreshing = false)
                 }
+            }
+        }
+    }
+
+    /**
+     * Handles a user-initiated pull-to-refresh gesture.
+     *
+     * Uses [HomeUiState.isPullRefreshing] instead of [HomeUiState.isRefreshing] so the
+     * pull indicator is only driven by physical pull gestures, not by automatic background
+     * refreshes (category change, initial load). The underlying API call and Room upsert
+     * are identical to [refreshCategory].
+     */
+    private fun pullToRefresh() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isPullRefreshing = true)
+            try {
+                refreshArticlesUseCase(currentCategory)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = e.message ?: "Failed to refresh articles"
+                )
+            } finally {
+                _uiState.value = _uiState.value.copy(isPullRefreshing = false)
             }
         }
     }
