@@ -24,7 +24,8 @@ import kotlinx.coroutines.launch
  * [errorMessage] flows consumed by the UI.
  *
  * This ViewModel is scoped to the Activity so a single instance is shared across all
- * auth-related screens (SignIn, SignUp, Confirm) and the settings screen for sign-out.
+ * auth-related screens (SignIn, SignUp, Confirm) and the Settings screen, which uses
+ * the [authState] to decide whether to show a sign-in or sign-out button.
  *
  * @param checkAuthSessionUseCase Use case for checking the current session validity.
  * @param signUpUseCase           Use case for registering a new account.

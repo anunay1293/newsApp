@@ -1,5 +1,7 @@
 package com.example.news.ui.navigation
 
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -15,9 +17,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -29,6 +34,8 @@ import androidx.navigation.navArgument
 import com.example.news.ui.articledetail.ArticleDetailScreen
 import com.example.news.ui.bookmarks.BookmarksScreen
 import com.example.news.R
+import com.example.news.presentation.auth.AuthUiState
+import com.example.news.presentation.auth.AuthViewModel
 import com.example.news.ui.home.HomeScreen
 import com.example.news.ui.home.SettingsScreen
 
@@ -49,7 +56,7 @@ sealed class Screen(val route: String, @StringRes val titleRes: Int) {
     /** The bookmarks tab listing all articles the user has saved. */
     object Bookmarks : Screen("bookmarks", R.string.tab_bookmarks)
 
-    /** The settings tab providing account management (e.g., sign-out). */
+    /** The settings tab providing account management (sign-in / sign-out). */
     object Settings : Screen("settings", R.string.tab_settings)
 
     /**
@@ -62,6 +69,15 @@ sealed class Screen(val route: String, @StringRes val titleRes: Int) {
         /** Builds the concrete route for a given [articleId]. */
         fun createRoute(articleId: String): String = "article_detail/$articleId"
     }
+
+    /**
+     * Full-screen sign-in flow launched from the Settings tab.
+     *
+     * Hosts the [AuthNavigation] graph (sign-in, sign-up, confirm). The bottom navigation
+     * bar is hidden while this flow is active. When authentication succeeds the destination
+     * is automatically popped, returning the user to the Settings tab.
+     */
+    object SignInFlow : Screen("sign_in_flow", 0)
 }
 
 /** Ordered list of bottom-navigation destinations, controlling tab display order. */
@@ -75,17 +91,19 @@ val bottomNavItems = listOf(
 private val bottomNavRoutes = bottomNavItems.map { it.route }.toSet()
 
 /**
- * Root composable for the authenticated portion of the app.
+ * Root composable for the app, always shown regardless of authentication state.
  *
  * Sets up a [Scaffold] with a Material 3 [NavigationBar] containing three tabs (Feed,
  * Bookmarks, Settings) and a [NavHost] that renders the corresponding screen composable
- * for the selected tab, plus full-screen destinations like [ArticleDetailScreen].
+ * for the selected tab, plus full-screen destinations like [ArticleDetailScreen] and the
+ * optional [Screen.SignInFlow] for authentication.
  *
  * Navigation behaviour:
  * - Tapping a tab pops back to the start destination (Feed) while saving and restoring
  *   per-tab state, ensuring a single back-stack entry per tab.
  * - [launchSingleTop] prevents duplicate destinations when re-selecting the current tab.
- * - The bottom bar is hidden when the user navigates to a non-tab screen (e.g., article detail).
+ * - The bottom bar is hidden when the user navigates to a non-tab screen (e.g., article
+ *   detail or the sign-in flow).
  */
 @Composable
 fun NewsNavigation() {
@@ -153,7 +171,11 @@ fun NewsNavigation() {
                 )
             }
             composable(Screen.Settings.route) {
-                SettingsScreen()
+                SettingsScreen(
+                    onNavigateToSignIn = {
+                        navController.navigate(Screen.SignInFlow.route)
+                    }
+                )
             }
             composable(
                 route = Screen.ArticleDetail.route,
@@ -164,6 +186,19 @@ fun NewsNavigation() {
                 ArticleDetailScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
+            }
+            composable(Screen.SignInFlow.route) {
+                val activity = LocalActivity.current as ComponentActivity
+                val viewModel: AuthViewModel = hiltViewModel(viewModelStoreOwner = activity)
+                val authState by viewModel.authState.collectAsState()
+
+                LaunchedEffect(authState) {
+                    if (authState is AuthUiState.SignedIn) {
+                        navController.popBackStack()
+                    }
+                }
+
+                AuthNavigation(onAuthSuccess = {})
             }
         }
     }

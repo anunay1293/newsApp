@@ -3,8 +3,8 @@ package com.example.news.presentation.auth
 /**
  * Sealed class representing the possible authentication states of the user.
  *
- * Used by [AuthViewModel] and observed by the UI ([AuthGate]) to decide which screen
- * to display. The states form a simple finite-state machine:
+ * Used by [AuthViewModel] and observed by the UI (Settings screen, sign-in flow) to
+ * decide which controls to display. The states form a simple finite-state machine:
  *
  * ```
  * CheckingSession ──► SignedIn
