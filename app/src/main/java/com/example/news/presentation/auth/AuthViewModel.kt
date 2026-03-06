@@ -51,7 +51,7 @@ class AuthViewModel @Inject constructor(
     private val syncBookmarksOnSignInUseCase: SyncBookmarksOnSignInUseCase,
     private val clearBookmarksOnSignOutUseCase: ClearBookmarksOnSignOutUseCase,
     private val getCurrentUserEmailUseCase: GetCurrentUserEmailUseCase
-) : ViewModel() {
+) : ViewModel(), SignInScreenEvents, SignUpScreenEvents, ConfirmScreenEvents, SettingsScreenEvents {
 
     private val _authState = MutableStateFlow<AuthUiState>(AuthUiState.CheckingSession)
 
@@ -131,7 +131,7 @@ class AuthViewModel @Inject constructor(
      * navigate to the email-confirmation screen. The password is retained in
      * [pendingPassword] so that [confirmSignUp] can auto sign-in after verification.
      */
-    fun signUp(email: String, password: String) {
+    override fun onSignUp(email: String, password: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
@@ -166,7 +166,7 @@ class AuthViewModel @Inject constructor(
      * [AuthUiState.SignedOut] so the user can sign in manually.
      * [pendingPassword] is always cleared after the attempt.
      */
-    fun confirmSignUp(email: String, code: String) {
+    override fun onConfirmSignUp(email: String, code: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
@@ -213,7 +213,7 @@ class AuthViewModel @Inject constructor(
      *
      * On success a status message is placed in [errorMessage] to inform the user.
      */
-    fun resendCode(email: String) {
+    override fun onResendCode(email: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
@@ -241,7 +241,7 @@ class AuthViewModel @Inject constructor(
      * the password is stored in [pendingPassword] so [confirmSignUp] can auto sign-in
      * after the user confirms.
      */
-    fun signIn(email: String, password: String) {
+    override fun onSignIn(email: String, password: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
@@ -280,7 +280,7 @@ class AuthViewModel @Inject constructor(
      * Remote bookmarks in DynamoDB are unaffected and will be re-synced on the next
      * sign-in via [syncBookmarksOnSignInUseCase].
      */
-    fun signOut() {
+    override fun onSignOut() {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null

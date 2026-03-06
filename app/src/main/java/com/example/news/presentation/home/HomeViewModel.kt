@@ -51,7 +51,7 @@ class HomeViewModel @Inject constructor(
     private val getPagedArticlesUseCase: GetPagedArticlesUseCase,
     private val refreshArticlesUseCase: RefreshArticlesUseCase,
     private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase
-) : ViewModel() {
+) : ViewModel(), HomeScreenEvents {
 
     private val _uiState = MutableStateFlow(HomeUiState())
 
@@ -87,30 +87,24 @@ class HomeViewModel @Inject constructor(
         observeCategory("general")
     }
 
-    /**
-     * Central event handler for all user interactions on the home screen.
-     *
-     * Dispatches each [HomeUiEvent] to the appropriate internal handler method, keeping
-     * the composable layer free of business logic.
-     */
-    fun handleEvent(event: HomeUiEvent) {
-        when (event) {
-            is HomeUiEvent.OnCategorySelected -> {
-                observeCategory(event.category)
-            }
-            is HomeUiEvent.OnSearchQueryChanged -> {
-                _uiState.value = _uiState.value.copy(searchQuery = event.searchQuery)
-            }
-            is HomeUiEvent.OnBookmarkToggle -> {
-                toggleBookmark(event.articleId, event.isCurrentlyBookmarked)
-            }
-            is HomeUiEvent.OnRetryClicked -> {
-                refreshCurrentCategory()
-            }
-            is HomeUiEvent.OnPullToRefresh -> {
-                pullToRefresh()
-            }
-        }
+    override fun onCategorySelected(category: String) {
+        observeCategory(category)
+    }
+
+    override fun onSearchQueryChanged(searchQuery: String) {
+        _uiState.value = _uiState.value.copy(searchQuery = searchQuery)
+    }
+
+    override fun onBookmarkToggle(articleId: String, isCurrentlyBookmarked: Boolean) {
+        toggleBookmark(articleId, isCurrentlyBookmarked)
+    }
+
+    override fun onRetryClicked() {
+        refreshCurrentCategory()
+    }
+
+    override fun onPullToRefresh() {
+        pullToRefresh()
     }
 
     private fun toggleBookmark(articleId: String, isCurrentlyBookmarked: Boolean) {

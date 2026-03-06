@@ -32,7 +32,7 @@ class BookmarksViewModel @Inject constructor(
     private val getPagedBookmarkedArticlesUseCase: GetPagedBookmarkedArticlesUseCase,
     private val toggleBookmarkUseCase: ToggleBookmarkUseCase,
     private val authRepository: AuthRepository
-) : ViewModel() {
+) : ViewModel(), BookmarksScreenEvents {
 
     private val _isSignedIn = MutableStateFlow(false)
     val isSignedIn: StateFlow<Boolean> = _isSignedIn.asStateFlow()
@@ -41,27 +41,16 @@ class BookmarksViewModel @Inject constructor(
         .cachedIn(viewModelScope)
 
     init {
-        recheckAuth()
+        onRecheckAuth()
     }
 
-    fun recheckAuth() {
+    override fun onRecheckAuth() {
         viewModelScope.launch {
             _isSignedIn.value = authRepository.checkSession()
         }
     }
 
-    /**
-     * Central event handler for user interactions on the bookmarks screen.
-     */
-    fun handleEvent(event: BookmarksUiEvent) {
-        when (event) {
-            is BookmarksUiEvent.OnBookmarkToggle -> {
-                toggleBookmark(event.articleId)
-            }
-        }
-    }
-
-    private fun toggleBookmark(articleId: String) {
+    override fun onBookmarkToggle(articleId: String) {
         viewModelScope.launch {
             toggleBookmarkUseCase(articleId)
         }

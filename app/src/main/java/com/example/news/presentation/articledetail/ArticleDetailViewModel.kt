@@ -33,7 +33,7 @@ class ArticleDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getArticleByIdUseCase: GetArticleByIdUseCase,
     private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase
-) : ViewModel() {
+) : ViewModel(), ArticleDetailScreenEvents {
 
     private val articleId: String = checkNotNull(savedStateHandle["articleId"])
 
@@ -49,16 +49,8 @@ class ArticleDetailViewModel @Inject constructor(
         loadArticle()
     }
 
-    /**
-     * Central event handler for all user interactions on the article detail screen.
-     *
-     * Dispatches each [ArticleDetailUiEvent] to the appropriate internal handler,
-     * keeping the composable layer free of business logic.
-     */
-    fun handleEvent(event: ArticleDetailUiEvent) {
-        when (event) {
-            is ArticleDetailUiEvent.OnBookmarkToggle -> toggleBookmark()
-        }
+    override fun onBookmarkToggle() {
+        toggleBookmark()
     }
 
     /**
