@@ -6,6 +6,7 @@ interface HomeScreenEvents {
     fun onBookmarkToggle(articleId: String, isCurrentlyBookmarked: Boolean)
     fun onRetryClicked()
     fun onPullToRefresh()
+    fun onFollowCategoryToggle(categoryId: String, isCurrentlyFollowed: Boolean)
 
     companion object : HomeScreenEvents {
         override fun onCategorySelected(category: String) = Unit
@@ -13,5 +14,6 @@ interface HomeScreenEvents {
         override fun onBookmarkToggle(articleId: String, isCurrentlyBookmarked: Boolean) = Unit
         override fun onRetryClicked() = Unit
         override fun onPullToRefresh() = Unit
+        override fun onFollowCategoryToggle(categoryId: String, isCurrentlyFollowed: Boolean) = Unit
     }
 }

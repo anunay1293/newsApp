@@ -18,6 +18,7 @@ fun Article.toUiModel(): ArticleUiModel {
         publishedDate = publishedDate,
         imageUrl = imageUrl,
         articleUrl = articleUrl,
-        isBookmarked = isBookmarked
+        isBookmarked = isBookmarked,
+        category = category
     )
 }

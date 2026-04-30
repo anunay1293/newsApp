@@ -16,6 +16,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,17 +39,33 @@ import com.example.news.ui.mapper.toUiModel
 fun ArticleDetailScreen(
     onNavigateBack: () -> Unit,
     onSignInRequired: (String) -> Unit = {},
+    onFollowSignInRequired: (String) -> Unit = {},
     pendingBookmarkArticleId: String? = null,
-    onPendingBookmarkConsumed: () -> Unit = {}
+    onPendingBookmarkConsumed: () -> Unit = {},
+    pendingFollowCategoryId: String? = null,
+    onPendingFollowCategoryConsumed: () -> Unit = {}
 ) {
     val viewModel: ArticleDetailViewModel = hiltViewModel()
     val events: ArticleDetailScreenEvents = viewModel
     val uiState by viewModel.uiState.collectAsState()
     val article = uiState.article?.toUiModel()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
         viewModel.authRequiredForBookmark.collect { articleId ->
             onSignInRequired(articleId)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.authRequiredForFollowCategory.collect { categoryId ->
+            onFollowSignInRequired(categoryId)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.followSnackbarMessage.collect { message ->
+            snackbarHostState.showSnackbar(message)
         }
     }
 
@@ -57,14 +75,22 @@ fun ArticleDetailScreen(
         onPendingBookmarkConsumed()
     }
 
+    LaunchedEffect(pendingFollowCategoryId) {
+        val id = pendingFollowCategoryId ?: return@LaunchedEffect
+        events.onFollowCategoryToggle()
+        onPendingFollowCategoryConsumed()
+    }
+
     Scaffold(
         topBar = {
             ArticleDetailTopBar(
                 article = article,
+                isCategoryFollowed = uiState.isCategoryFollowed,
                 onNavigateBack = onNavigateBack,
                 events = events
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Box(

@@ -26,6 +26,22 @@ Resources:
         - AttributeName: articleId
           KeyType: RANGE
 
+  FollowedCategoriesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: newsapp-followed-categories
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: categoryId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: categoryId
+          KeyType: RANGE
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -39,7 +55,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: DynamoDBBookmarks
+        - PolicyName: DynamoDBAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -49,6 +65,12 @@ Resources:
                   - dynamodb:DeleteItem
                   - dynamodb:Query
                 Resource: !GetAtt BookmarksTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource: !GetAtt FollowedCategoriesTable.Arn
 
   GetBookmarksFunction:
     Type: AWS::Lambda::Function
@@ -228,6 +250,174 @@ Resources:
       StageName: '$default'
       AutoDeploy: true
 
+  GetFollowedCategoriesFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: newsapp-getFollowedCategories
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          CATEGORIES_TABLE_NAME: !Ref FollowedCategoriesTable
+      Code:
+        ZipFile: |
+          const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+          const { QueryCommand, DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+          const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+          exports.handler = async (event) => {
+            const userId = event.requestContext.authorizer.jwt.claims.sub;
+            const result = await client.send(new QueryCommand({
+              TableName: process.env.CATEGORIES_TABLE_NAME,
+              KeyConditionExpression: "userId = :uid",
+              ExpressionAttributeValues: { ":uid": userId }
+            }));
+            return {
+              statusCode: 200,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ categories: result.Items })
+            };
+          };
+
+  AddFollowedCategoryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: newsapp-addFollowedCategory
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          CATEGORIES_TABLE_NAME: !Ref FollowedCategoriesTable
+      Code:
+        ZipFile: |
+          const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+          const { PutCommand, DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+          const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+          exports.handler = async (event) => {
+            const userId = event.requestContext.authorizer.jwt.claims.sub;
+            const body = JSON.parse(event.body);
+            await client.send(new PutCommand({
+              TableName: process.env.CATEGORIES_TABLE_NAME,
+              Item: { userId, ...body }
+            }));
+            return {
+              statusCode: 200,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ success: true })
+            };
+          };
+
+  RemoveFollowedCategoryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: newsapp-removeFollowedCategory
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          CATEGORIES_TABLE_NAME: !Ref FollowedCategoriesTable
+      Code:
+        ZipFile: |
+          const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+          const { DeleteCommand, DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+          const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+          exports.handler = async (event) => {
+            const userId = event.requestContext.authorizer.jwt.claims.sub;
+            const categoryId = event.pathParameters.categoryId;
+            await client.send(new DeleteCommand({
+              TableName: process.env.CATEGORIES_TABLE_NAME,
+              Key: { userId, categoryId }
+            }));
+            return {
+              statusCode: 200,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ success: true })
+            };
+          };
+
+  GetFollowedCategoriesIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BookmarkApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetFollowedCategoriesFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+
+  AddFollowedCategoryIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BookmarkApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt AddFollowedCategoryFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+
+  RemoveFollowedCategoryIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BookmarkApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt RemoveFollowedCategoryFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+
+  GetFollowedCategoriesRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BookmarkApi
+      RouteKey: GET /followed-categories
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub integrations/${GetFollowedCategoriesIntegration}
+
+  AddFollowedCategoryRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BookmarkApi
+      RouteKey: POST /followed-categories
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub integrations/${AddFollowedCategoryIntegration}
+
+  RemoveFollowedCategoryRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BookmarkApi
+      RouteKey: DELETE /followed-categories/{categoryId}
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub integrations/${RemoveFollowedCategoryIntegration}
+
+  GetFollowedCategoriesPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetFollowedCategoriesFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BookmarkApi}/*/*/followed-categories
+
+  AddFollowedCategoryPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AddFollowedCategoryFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BookmarkApi}/*/*/followed-categories
+
+  RemoveFollowedCategoryPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RemoveFollowedCategoryFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BookmarkApi}/*/*/followed-categories/*
+
   GetBookmarksPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -257,5 +447,8 @@ Outputs:
     Description: Base URL for the bookmark API
     Value: !GetAtt BookmarkApi.ApiEndpoint
   TableName:
-    Description: DynamoDB table name
+    Description: DynamoDB bookmarks table name
     Value: !Ref BookmarksTable
+  FollowedCategoriesTableName:
+    Description: DynamoDB followed categories table name
+    Value: !Ref FollowedCategoriesTable

@@ -2,6 +2,8 @@ package com.example.news.ui.articledetail
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +26,7 @@ import com.example.news.ui.theme.NewsTheme
 @Composable
 fun ArticleDetailTopBar(
     article: ArticleUiModel?,
+    isCategoryFollowed: Boolean,
     onNavigateBack: () -> Unit,
     events: ArticleDetailScreenEvents
 ) {
@@ -46,9 +49,22 @@ fun ArticleDetailTopBar(
         },
         actions = {
             if (article != null) {
-                IconButton(
-                    onClick = { events.onBookmarkToggle() }
-                ) {
+                IconButton(onClick = { events.onFollowCategoryToggle() }) {
+                    Icon(
+                        imageVector = if (isCategoryFollowed) Icons.Default.Done else Icons.Default.Add,
+                        contentDescription = if (isCategoryFollowed) {
+                            stringResource(R.string.cd_unfollow_category)
+                        } else {
+                            stringResource(R.string.cd_follow_category)
+                        },
+                        tint = if (isCategoryFollowed) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+                IconButton(onClick = { events.onBookmarkToggle() }) {
                     Icon(
                         imageVector = if (article.isBookmarked) {
                             Icons.Default.Favorite
@@ -78,7 +94,7 @@ fun ArticleDetailTopBar(
 
 @Preview
 @Composable
-private fun ArticleDetailTopBarPreview() {
+private fun ArticleDetailTopBarFollowedPreview() {
     NewsTheme {
         ArticleDetailTopBar(
             article = ArticleUiModel(
@@ -88,8 +104,10 @@ private fun ArticleDetailTopBarPreview() {
                 publishedDate = System.currentTimeMillis(),
                 imageUrl = null,
                 articleUrl = "https://example.com",
-                isBookmarked = true
+                isBookmarked = true,
+                category = "technology"
             ),
+            isCategoryFollowed = true,
             onNavigateBack = {},
             events = ArticleDetailScreenEvents
         )
@@ -98,7 +116,7 @@ private fun ArticleDetailTopBarPreview() {
 
 @Preview
 @Composable
-private fun ArticleDetailTopBarNotBookmarkedPreview() {
+private fun ArticleDetailTopBarNotFollowedPreview() {
     NewsTheme {
         ArticleDetailTopBar(
             article = ArticleUiModel(
@@ -108,8 +126,10 @@ private fun ArticleDetailTopBarNotBookmarkedPreview() {
                 publishedDate = System.currentTimeMillis(),
                 imageUrl = null,
                 articleUrl = "https://example.com",
-                isBookmarked = false
+                isBookmarked = false,
+                category = "technology"
             ),
+            isCategoryFollowed = false,
             onNavigateBack = {},
             events = ArticleDetailScreenEvents
         )

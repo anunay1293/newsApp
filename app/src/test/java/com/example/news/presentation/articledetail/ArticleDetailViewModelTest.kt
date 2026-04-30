@@ -5,10 +5,14 @@ import app.cash.turbine.test
 import com.example.news.domain.model.Article
 import com.example.news.domain.model.BookmarkToggleResult
 import com.example.news.domain.usecase.AuthAwareToggleBookmarkUseCase
+import com.example.news.domain.usecase.AuthAwareToggleFollowCategoryUseCase
 import com.example.news.domain.usecase.GetArticleByIdUseCase
+import com.example.news.domain.usecase.GetFollowedCategoriesUseCase
 import com.example.news.util.MainDispatcherRule
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -27,6 +31,8 @@ class ArticleDetailViewModelTest {
 
     private val getArticleByIdUseCase: GetArticleByIdUseCase = mockk()
     private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase = mockk()
+    private val authAwareToggleFollowCategoryUseCase: AuthAwareToggleFollowCategoryUseCase = mockk()
+    private val getFollowedCategoriesUseCase: GetFollowedCategoriesUseCase = mockk()
 
     private val testArticle = Article(
         id = "art1",
@@ -39,11 +45,14 @@ class ArticleDetailViewModelTest {
     )
 
     private fun createViewModel(): ArticleDetailViewModel {
+        every { getFollowedCategoriesUseCase() } returns flowOf(emptySet())
         val savedStateHandle = SavedStateHandle(mapOf("articleId" to "art1"))
         return ArticleDetailViewModel(
             savedStateHandle,
             getArticleByIdUseCase,
-            authAwareToggleBookmarkUseCase
+            authAwareToggleBookmarkUseCase,
+            authAwareToggleFollowCategoryUseCase,
+            getFollowedCategoriesUseCase
         )
     }
 

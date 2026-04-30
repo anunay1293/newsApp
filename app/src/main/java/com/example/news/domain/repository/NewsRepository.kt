@@ -99,4 +99,29 @@ interface NewsRepository {
      * they will be re-synced via [syncBookmarksFromRemote] on the next sign-in.
      */
     suspend fun clearLocalBookmarks()
+
+    /** Toggles the followed state for the category identified by [categoryId]. */
+    suspend fun toggleFollowCategory(categoryId: String)
+
+    /**
+     * Returns a reactive, paginated stream of articles from all followed categories,
+     * sorted by publish date descending.
+     *
+     * The flow re-emits whenever the set of followed categories changes, rebuilding the
+     * Pager to include the updated category list. Returns an empty [PagingData] immediately
+     * when no categories are followed.
+     */
+    fun getPagedFollowedArticles(searchQuery: String = ""): Flow<PagingData<Article>>
+
+    /** Returns a reactive stream of the currently followed category IDs. */
+    fun observeFollowedCategories(): Flow<Set<String>>
+
+    /** Pulls followed categories from DynamoDB and replaces the local set. */
+    suspend fun syncFollowedCategoriesFromRemote()
+
+    /** Pushes a single followed-category change to DynamoDB (fire-and-forget). */
+    suspend fun syncFollowedCategoryToRemote(categoryId: String, isFollowed: Boolean)
+
+    /** Removes all local followed-category data. Called on sign-out. */
+    suspend fun clearLocalFollowedCategories()
 }

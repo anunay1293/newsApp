@@ -6,12 +6,16 @@ import androidx.paging.PagingData
 import androidx.paging.map
 import android.util.Log
 import com.example.news.data.api.BookmarkApiService
+import com.example.news.data.api.FollowedCategoryApiService
 import com.example.news.data.api.NewsApiService
 import com.example.news.data.dto.BookmarkDto
+import com.example.news.data.dto.FollowedCategoryDto
 import com.example.news.data.local.ArticleDao
 import com.example.news.data.local.ArticleEntity
 import com.example.news.data.local.BookmarkDao
 import com.example.news.data.local.BookmarkEntity
+import com.example.news.data.local.FollowedCategoryDao
+import com.example.news.data.local.FollowedCategoryEntity
 import com.example.news.data.mapper.toDomain
 import com.example.news.data.mapper.toEntity
 import com.example.news.domain.model.Article
@@ -23,6 +27,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -49,11 +54,13 @@ private const val TAG = "NewsRepositoryImpl"
 class NewsRepositoryImpl @Inject constructor(
     private val articleDao: ArticleDao,
     private val bookmarkDao: BookmarkDao,
+    private val followedCategoryDao: FollowedCategoryDao,
     private val newsApiService: NewsApiService,
-    private val bookmarkApiService: BookmarkApiService
+    private val bookmarkApiService: BookmarkApiService,
+    private val followedCategoryApiService: FollowedCategoryApiService
 ) : NewsRepository {
-    
-    /** Dedicated IO-bound coroutine scope for bookmark cache refreshes. */
+
+    /** Dedicated IO-bound coroutine scope for bookmark and follow-category background operations. */
     private val bookmarkScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
@@ -61,10 +68,19 @@ class NewsRepositoryImpl @Inject constructor(
      * [ArticleUiModel.isBookmarked] flag without a database JOIN on every page.
      */
     private val _bookmarkedIds = MutableStateFlow<Set<String>>(emptySet())
-    
+
+    /** In-memory cache of followed category IDs. */
+    private val _followedCategoryIds = MutableStateFlow<Set<String>>(emptySet())
+
+    private val followedCategoriesFromRoom: Flow<Set<String>> =
+        followedCategoryDao.observeAllFollowedCategoryIds()
+            .map { it.toSet() }
+            .distinctUntilChanged()
+
     init {
         bookmarkScope.launch {
             refreshBookmarkedIds()
+            refreshFollowedCategoryIds()
         }
     }
     
@@ -75,6 +91,11 @@ class NewsRepositoryImpl @Inject constructor(
     private suspend fun refreshBookmarkedIds() {
         val bookmarkedIdsList = bookmarkDao.getAllBookmarkedIds()
         _bookmarkedIds.value = bookmarkedIdsList.toSet()
+    }
+
+    private suspend fun refreshFollowedCategoryIds() {
+        val ids = followedCategoryDao.getAllFollowedCategoryIds()
+        _followedCategoryIds.value = ids.toSet()
     }
     
     /**
@@ -285,6 +306,90 @@ class NewsRepositoryImpl @Inject constructor(
         } else {
             bookmarkApiService.removeBookmark(articleId)
         }
+    }
+
+    override suspend fun toggleFollowCategory(categoryId: String) {
+        val existing = followedCategoryDao.getFollowedCategory(categoryId)
+        val isNowFollowed: Boolean
+        if (existing != null) {
+            followedCategoryDao.deleteFollowedCategory(existing)
+            _followedCategoryIds.value = _followedCategoryIds.value - categoryId
+            isNowFollowed = false
+        } else {
+            followedCategoryDao.insertFollowedCategory(FollowedCategoryEntity(categoryId = categoryId))
+            _followedCategoryIds.value = _followedCategoryIds.value + categoryId
+            isNowFollowed = true
+        }
+        refreshFollowedCategoryIds()
+
+        bookmarkScope.launch {
+            try {
+                syncFollowedCategoryToRemote(categoryId, isNowFollowed)
+            } catch (e: Exception) {
+                Log.e(TAG, "Remote follow-category sync failed for $categoryId", e)
+            }
+        }
+    }
+
+    override fun getPagedFollowedArticles(searchQuery: String): Flow<PagingData<Article>> {
+        return followedCategoriesFromRoom.flatMapLatest { categories ->
+            if (categories.isEmpty()) {
+                flowOf(PagingData.empty())
+            } else {
+                val pagingSourceFactory = {
+                    articleDao.getPagedArticlesByFollowedCategories(categories.toList(), searchQuery)
+                }
+                Pager(
+                    config = PagingConfig(
+                        pageSize = 20,
+                        enablePlaceholders = false,
+                        prefetchDistance = 10
+                    ),
+                    pagingSourceFactory = pagingSourceFactory
+                ).flow.map { pagingData ->
+                    pagingData.map { entity ->
+                        entity.toDomain(isBookmarked = _bookmarkedIds.value.contains(entity.articleId))
+                    }
+                }
+            }
+        }
+    }
+
+    override fun observeFollowedCategories(): Flow<Set<String>> = followedCategoriesFromRoom
+
+    override suspend fun syncFollowedCategoriesFromRemote() {
+        try {
+            val response = followedCategoryApiService.getFollowedCategories()
+            followedCategoryDao.deleteAllFollowedCategories()
+            for (dto in response.categories) {
+                followedCategoryDao.insertFollowedCategory(
+                    FollowedCategoryEntity(categoryId = dto.categoryId, followedAt = dto.followedAt)
+                )
+            }
+            refreshFollowedCategoryIds()
+            Log.d(TAG, "Synced ${response.categories.size} followed categories from remote")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync followed categories from remote", e)
+        }
+    }
+
+    override suspend fun syncFollowedCategoryToRemote(categoryId: String, isFollowed: Boolean) {
+        val entity = followedCategoryDao.getFollowedCategory(categoryId)
+        if (isFollowed) {
+            followedCategoryApiService.addFollowedCategory(
+                FollowedCategoryDto(
+                    categoryId = categoryId,
+                    followedAt = entity?.followedAt ?: System.currentTimeMillis()
+                )
+            )
+        } else {
+            followedCategoryApiService.removeFollowedCategory(categoryId)
+        }
+    }
+
+    override suspend fun clearLocalFollowedCategories() {
+        followedCategoryDao.deleteAllFollowedCategories()
+        _followedCategoryIds.value = emptySet()
     }
 }
 

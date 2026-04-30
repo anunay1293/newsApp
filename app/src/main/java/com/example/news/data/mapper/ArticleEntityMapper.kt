@@ -56,7 +56,8 @@ fun ArticleEntity.toDomain(isBookmarked: Boolean = false): Article {
         publishedDate = publishedDate,
         imageUrl = urlToImage?.takeIf { it.isNotBlank() },
         articleUrl = url,
-        isBookmarked = isBookmarked
+        isBookmarked = isBookmarked,
+        category = category
     )
 }
 

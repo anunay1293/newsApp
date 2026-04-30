@@ -12,8 +12,10 @@ import com.example.news.domain.usecase.SignInUseCase
 import com.example.news.domain.usecase.SignOutUseCase
 import com.example.news.domain.usecase.SignUpUseCase
 import com.example.news.domain.usecase.ClearBookmarksOnSignOutUseCase
+import com.example.news.domain.usecase.ClearFollowedCategoriesOnSignOutUseCase
 import com.example.news.domain.usecase.GetCurrentUserEmailUseCase
 import com.example.news.domain.usecase.SyncBookmarksOnSignInUseCase
+import com.example.news.domain.usecase.SyncFollowedCategoriesOnSignInUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,6 +52,8 @@ class AuthViewModel @Inject constructor(
     private val signOutUseCase: SignOutUseCase,
     private val syncBookmarksOnSignInUseCase: SyncBookmarksOnSignInUseCase,
     private val clearBookmarksOnSignOutUseCase: ClearBookmarksOnSignOutUseCase,
+    private val syncFollowedCategoriesOnSignInUseCase: SyncFollowedCategoriesOnSignInUseCase,
+    private val clearFollowedCategoriesOnSignOutUseCase: ClearFollowedCategoriesOnSignOutUseCase,
     private val getCurrentUserEmailUseCase: GetCurrentUserEmailUseCase
 ) : ViewModel(), SignInScreenEvents, SignUpScreenEvents, ConfirmScreenEvents, SettingsScreenEvents {
 
@@ -108,7 +112,10 @@ class AuthViewModel @Inject constructor(
 
                 if (_authState.value !is AuthUiState.NeedsConfirmation) {
                     _authState.value = if (isSignedIn) {
-                        launch { syncBookmarksOnSignInUseCase() }
+                        launch {
+                            syncBookmarksOnSignInUseCase()
+                            syncFollowedCategoriesOnSignInUseCase()
+                        }
                         fetchUserEmail()
                         AuthUiState.SignedIn
                     } else {
@@ -183,7 +190,10 @@ class AuthViewModel @Inject constructor(
                             is AuthResult.Success -> {
                                 _authState.value = AuthUiState.SignedIn
                                 _errorMessage.value = null
-                                launch { syncBookmarksOnSignInUseCase() }
+                                launch {
+                            syncBookmarksOnSignInUseCase()
+                            syncFollowedCategoriesOnSignInUseCase()
+                        }
                                 fetchUserEmail()
                             }
                             else -> {
@@ -252,7 +262,10 @@ class AuthViewModel @Inject constructor(
                     pendingPassword = null
                     _authState.value = AuthUiState.SignedIn
                     _errorMessage.value = null
-                    launch { syncBookmarksOnSignInUseCase() }
+                    launch {
+                            syncBookmarksOnSignInUseCase()
+                            syncFollowedCategoriesOnSignInUseCase()
+                        }
                     fetchUserEmail()
                 }
                 is AuthResult.Error -> {
@@ -301,6 +314,7 @@ class AuthViewModel @Inject constructor(
             }
 
             clearBookmarksOnSignOutUseCase()
+            clearFollowedCategoriesOnSignOutUseCase()
 
             _isLoading.value = false
         }

@@ -77,4 +77,11 @@
     <string name="tab_feed">Feed</string>
     <string name="tab_bookmarks">Bookmarks</string>
     <string name="tab_settings">Settings</string>
+
+    <!-- Follow Category -->
+    <string name="cd_follow_category">Follow category</string>
+    <string name="cd_unfollow_category">Unfollow category</string>
+    <string name="category_followed">Followed</string>
+    <string name="empty_no_followed_categories_title">No followed categories</string>
+    <string name="empty_no_followed_categories_body">Tap \'+\' next to a category to follow it</string>
 </resources>

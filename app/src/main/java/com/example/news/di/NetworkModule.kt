@@ -2,6 +2,7 @@ package com.example.news.di
 
 import com.example.news.data.api.BookmarkApiService
 import com.example.news.data.api.CognitoAuthInterceptor
+import com.example.news.data.api.FollowedCategoryApiService
 import com.example.news.data.api.NewsApiService
 import com.example.news.domain.repository.AuthRepository
 import dagger.Module
@@ -86,5 +87,11 @@ object NetworkModule {
     @Singleton
     fun provideBookmarkApiService(@Authenticated retrofit: Retrofit): BookmarkApiService {
         return retrofit.create(BookmarkApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideFollowedCategoryApiService(@Authenticated retrofit: Retrofit): FollowedCategoryApiService {
+        return retrofit.create(FollowedCategoryApiService::class.java)
     }
 }

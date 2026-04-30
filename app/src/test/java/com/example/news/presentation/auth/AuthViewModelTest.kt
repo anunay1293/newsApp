@@ -3,6 +3,7 @@ package com.example.news.presentation.auth
 import com.example.news.domain.model.AuthResult
 import com.example.news.domain.usecase.CheckAuthSessionUseCase
 import com.example.news.domain.usecase.ClearBookmarksOnSignOutUseCase
+import com.example.news.domain.usecase.ClearFollowedCategoriesOnSignOutUseCase
 import com.example.news.domain.usecase.ConfirmSignUpUseCase
 import com.example.news.domain.usecase.GetCurrentUserEmailUseCase
 import com.example.news.domain.usecase.ResendCodeUseCase
@@ -10,6 +11,7 @@ import com.example.news.domain.usecase.SignInUseCase
 import com.example.news.domain.usecase.SignOutUseCase
 import com.example.news.domain.usecase.SignUpUseCase
 import com.example.news.domain.usecase.SyncBookmarksOnSignInUseCase
+import com.example.news.domain.usecase.SyncFollowedCategoriesOnSignInUseCase
 import com.example.news.util.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -38,6 +40,8 @@ class AuthViewModelTest {
     private val signOutUseCase: SignOutUseCase = mockk()
     private val syncBookmarksOnSignInUseCase: SyncBookmarksOnSignInUseCase = mockk(relaxUnitFun = true)
     private val clearBookmarksOnSignOutUseCase: ClearBookmarksOnSignOutUseCase = mockk(relaxUnitFun = true)
+    private val syncFollowedCategoriesOnSignInUseCase: SyncFollowedCategoriesOnSignInUseCase = mockk(relaxUnitFun = true)
+    private val clearFollowedCategoriesOnSignOutUseCase: ClearFollowedCategoriesOnSignOutUseCase = mockk(relaxUnitFun = true)
     private val getCurrentUserEmailUseCase: GetCurrentUserEmailUseCase = mockk()
 
     private fun createViewModel(): AuthViewModel {
@@ -50,6 +54,8 @@ class AuthViewModelTest {
             signOutUseCase,
             syncBookmarksOnSignInUseCase,
             clearBookmarksOnSignOutUseCase,
+            syncFollowedCategoriesOnSignInUseCase,
+            clearFollowedCategoriesOnSignOutUseCase,
             getCurrentUserEmailUseCase
         )
     }

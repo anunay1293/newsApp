@@ -8,8 +8,13 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.example.news.domain.model.Article
 import com.example.news.domain.model.BookmarkToggleResult
+import com.example.news.domain.model.CategoryFollowResult
 import com.example.news.domain.usecase.AuthAwareToggleBookmarkUseCase
+import com.example.news.domain.usecase.AuthAwareToggleFollowCategoryUseCase
+import com.example.news.domain.usecase.CheckAuthSessionUseCase
+import com.example.news.domain.usecase.GetFollowedCategoriesUseCase
 import com.example.news.domain.usecase.GetPagedArticlesUseCase
+import com.example.news.domain.usecase.GetPagedFollowedArticlesUseCase
 import com.example.news.domain.usecase.RefreshArticlesUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -23,34 +28,16 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
-/**
- * ViewModel for the home / news-feed screen.
- *
- * Implements the **Single Source of Truth (SSOT)** pattern via domain use cases:
- * - The UI always reads articles from the local Room database via Paging 3.
- * - Network requests are fired in the background to refresh Room; Room then notifies the
- *   PagingData observers automatically.
- *
- * Key responsibilities:
- * 1. Category selection -- switches the Room query and triggers a background refresh.
- * 2. Search -- filters the Room-backed PagingData by title, author, or source name.
- * 3. Bookmark toggling -- delegates to [ToggleBookmarkUseCase] and relies on PagingSource
- *    invalidation to refresh bookmark icons.
- * 4. Error / retry -- surfaces network errors and allows the user to retry a failed refresh.
- * 5. Pull-to-refresh -- user-initiated refresh via a swipe gesture, tracked by a dedicated
- *    [HomeUiState.isPullRefreshing] flag to avoid showing the pull indicator during
- *    automatic background refreshes.
- *
- * @param getPagedArticlesUseCase  Use case for observing paginated articles from Room.
- * @param refreshArticlesUseCase   Use case for fetching fresh articles from the remote API.
- * @param toggleBookmarkUseCase    Use case for toggling an article's bookmark state.
- */
 @HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel @Inject constructor(
     private val getPagedArticlesUseCase: GetPagedArticlesUseCase,
     private val refreshArticlesUseCase: RefreshArticlesUseCase,
-    private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase
+    private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase,
+    private val authAwareToggleFollowCategoryUseCase: AuthAwareToggleFollowCategoryUseCase,
+    private val getPagedFollowedArticlesUseCase: GetPagedFollowedArticlesUseCase,
+    private val getFollowedCategoriesUseCase: GetFollowedCategoriesUseCase,
+    private val checkAuthSessionUseCase: CheckAuthSessionUseCase
 ) : ViewModel(), HomeScreenEvents {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -58,37 +45,54 @@ class HomeViewModel @Inject constructor(
     private val _authRequiredChannel = Channel<String>(Channel.BUFFERED)
     val authRequiredForBookmark: Flow<String> = _authRequiredChannel.receiveAsFlow()
 
-    /** Observable UI state consumed by the home screen composable. */
+    private val _authRequiredForFollowChannel = Channel<String>(Channel.BUFFERED)
+    val authRequiredForFollowCategory: Flow<String> = _authRequiredForFollowChannel.receiveAsFlow()
+
+    private val _followSnackbarChannel = Channel<String>(Channel.BUFFERED)
+    val followSnackbarMessage: Flow<String> = _followSnackbarChannel.receiveAsFlow()
+
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    /**
-     * Reactive stream of paged domain [Article] objects from the Room database.
-     *
-     * Re-emits a new [PagingData] whenever [HomeUiState.selectedCategory] or
-     * [HomeUiState.searchQuery] changes, using [flatMapLatest] to cancel stale queries.
-     * The resulting flow is cached in [viewModelScope] to survive configuration changes.
-     * The UI layer is responsible for mapping each [Article] to an [ArticleUiModel] at
-     * render time.
-     */
     val pagedArticles: Flow<PagingData<Article>> = _uiState
         .distinctUntilChanged { old, new ->
             old.selectedCategory == new.selectedCategory && old.searchQuery == new.searchQuery
         }
         .flatMapLatest { state ->
-            getPagedArticlesUseCase(state.selectedCategory, state.searchQuery)
-                .cachedIn(viewModelScope)
+            if (state.selectedCategory == FOLLOWED_CATEGORY) {
+                getPagedFollowedArticlesUseCase(state.searchQuery).cachedIn(viewModelScope)
+            } else {
+                getPagedArticlesUseCase(state.selectedCategory, state.searchQuery)
+                    .cachedIn(viewModelScope)
+            }
         }
 
     private var currentCategory = "general"
-
     private var refreshJob: Job? = null
 
     init {
         observeCategory("general")
+        viewModelScope.launch {
+            getFollowedCategoriesUseCase().collect { followed ->
+                _uiState.value = _uiState.value.copy(
+                    followedCategories = followed,
+                    isCurrentCategoryFollowed = followed.contains(_uiState.value.selectedCategory)
+                )
+            }
+        }
     }
 
     override fun onCategorySelected(category: String) {
-        observeCategory(category)
+        if (category == FOLLOWED_CATEGORY) {
+            viewModelScope.launch {
+                if (!checkAuthSessionUseCase()) {
+                    _authRequiredForFollowChannel.send(FOLLOWED_CATEGORY)
+                } else {
+                    observeFollowedFeed()
+                }
+            }
+        } else {
+            observeCategory(category)
+        }
     }
 
     override fun onSearchQueryChanged(searchQuery: String) {
@@ -107,6 +111,25 @@ class HomeViewModel @Inject constructor(
         pullToRefresh()
     }
 
+    override fun onFollowCategoryToggle(categoryId: String, isCurrentlyFollowed: Boolean) {
+        viewModelScope.launch {
+            val result = authAwareToggleFollowCategoryUseCase(categoryId, isCurrentlyFollowed)
+            when (result) {
+                is CategoryFollowResult.Success -> {
+                    val message = if (isCurrentlyFollowed) {
+                        "Unfollowed ${categoryId.replaceFirstChar { it.uppercase() }}"
+                    } else {
+                        "Following ${categoryId.replaceFirstChar { it.uppercase() }}"
+                    }
+                    _followSnackbarChannel.send(message)
+                }
+                is CategoryFollowResult.AuthRequired -> {
+                    _authRequiredForFollowChannel.send(result.categoryId)
+                }
+            }
+        }
+    }
+
     private fun toggleBookmark(articleId: String, isCurrentlyBookmarked: Boolean) {
         viewModelScope.launch {
             val result = authAwareToggleBookmarkUseCase(articleId, isCurrentlyBookmarked)
@@ -116,49 +139,64 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Switches the active news category and begins observing articles for it.
-     *
-     * Steps performed:
-     * 1. Cancel any in-flight network refresh for the previous category.
-     * 2. Update [HomeUiState.selectedCategory], which triggers [pagedArticles] to re-query Room.
-     * 3. Kick off a background network refresh so Room receives the latest articles.
-     */
     private fun observeCategory(category: String) {
         refreshJob?.cancel()
-
         currentCategory = category
-
         _uiState.value = _uiState.value.copy(
             selectedCategory = category,
             isRefreshing = false,
-            errorMessage = null
+            errorMessage = null,
+            isCurrentCategoryFollowed = _uiState.value.followedCategories.contains(category)
         )
-
         refreshCategory(category)
     }
 
-    private fun refreshCurrentCategory() {
-        refreshCategory(currentCategory)
+    private fun observeFollowedFeed() {
+        refreshJob?.cancel()
+        currentCategory = FOLLOWED_CATEGORY
+        _uiState.value = _uiState.value.copy(
+            selectedCategory = FOLLOWED_CATEGORY,
+            isRefreshing = false,
+            errorMessage = null,
+            isCurrentCategoryFollowed = false
+        )
+        refreshFollowedCategories()
     }
 
-    /**
-     * Fetches fresh articles for [category] from the remote API via [RefreshArticlesUseCase]
-     * and upserts them into Room.
-     *
-     * While the refresh is in progress, [HomeUiState.isRefreshing] is `true`. On failure
-     * the error is surfaced via [HomeUiState.errorMessage]; the cached data in Room
-     * remains available to the user.
-     */
+    private fun refreshFollowedCategories() {
+        val followed = _uiState.value.followedCategories
+        if (followed.isEmpty()) return
+        refreshJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRefreshing = true)
+            try {
+                followed.forEach { category ->
+                    launch { refreshArticlesUseCase(category) }
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = e.message ?: "Failed to refresh followed categories"
+                )
+            } finally {
+                _uiState.value = _uiState.value.copy(isRefreshing = false)
+            }
+        }
+    }
+
+    private fun refreshCurrentCategory() {
+        if (currentCategory == FOLLOWED_CATEGORY) {
+            refreshFollowedCategories()
+        } else {
+            refreshCategory(currentCategory)
+        }
+    }
+
     private fun refreshCategory(category: String) {
         refreshJob?.cancel()
-
         refreshJob = viewModelScope.launch {
             try {
                 if (currentCategory == category) {
                     _uiState.value = _uiState.value.copy(isRefreshing = true)
                 }
-
                 refreshArticlesUseCase(category)
             } catch (e: Exception) {
                 if (currentCategory == category) {
@@ -175,19 +213,17 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Handles a user-initiated pull-to-refresh gesture.
-     *
-     * Uses [HomeUiState.isPullRefreshing] instead of [HomeUiState.isRefreshing] so the
-     * pull indicator is only driven by physical pull gestures, not by automatic background
-     * refreshes (category change, initial load). The underlying API call and Room upsert
-     * are identical to [refreshCategory].
-     */
     private fun pullToRefresh() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isPullRefreshing = true)
             try {
-                refreshArticlesUseCase(currentCategory)
+                if (currentCategory == FOLLOWED_CATEGORY) {
+                    _uiState.value.followedCategories.forEach { category ->
+                        launch { refreshArticlesUseCase(category) }
+                    }
+                } else {
+                    refreshArticlesUseCase(currentCategory)
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     errorMessage = e.message ?: "Failed to refresh articles"
@@ -196,5 +232,9 @@ class HomeViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(isPullRefreshing = false)
             }
         }
+    }
+
+    companion object {
+        const val FOLLOWED_CATEGORY = "followed"
     }
 }

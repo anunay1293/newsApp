@@ -4,7 +4,11 @@ import androidx.paging.PagingData
 import app.cash.turbine.test
 import com.example.news.domain.model.BookmarkToggleResult
 import com.example.news.domain.usecase.AuthAwareToggleBookmarkUseCase
+import com.example.news.domain.usecase.AuthAwareToggleFollowCategoryUseCase
+import com.example.news.domain.usecase.CheckAuthSessionUseCase
+import com.example.news.domain.usecase.GetFollowedCategoriesUseCase
 import com.example.news.domain.usecase.GetPagedArticlesUseCase
+import com.example.news.domain.usecase.GetPagedFollowedArticlesUseCase
 import com.example.news.domain.usecase.RefreshArticlesUseCase
 import com.example.news.util.MainDispatcherRule
 import io.mockk.coEvery
@@ -32,13 +36,23 @@ class HomeViewModelTest {
     private val getPagedArticlesUseCase: GetPagedArticlesUseCase = mockk()
     private val refreshArticlesUseCase: RefreshArticlesUseCase = mockk(relaxUnitFun = true)
     private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase = mockk()
+    private val authAwareToggleFollowCategoryUseCase: AuthAwareToggleFollowCategoryUseCase = mockk()
+    private val getPagedFollowedArticlesUseCase: GetPagedFollowedArticlesUseCase = mockk()
+    private val getFollowedCategoriesUseCase: GetFollowedCategoriesUseCase = mockk()
+    private val checkAuthSessionUseCase: CheckAuthSessionUseCase = mockk()
 
     private fun createViewModel(): HomeViewModel {
         every { getPagedArticlesUseCase(any(), any()) } returns flowOf(PagingData.empty())
+        every { getPagedFollowedArticlesUseCase(any()) } returns flowOf(PagingData.empty())
+        every { getFollowedCategoriesUseCase() } returns flowOf(emptySet())
         return HomeViewModel(
             getPagedArticlesUseCase,
             refreshArticlesUseCase,
-            authAwareToggleBookmarkUseCase
+            authAwareToggleBookmarkUseCase,
+            authAwareToggleFollowCategoryUseCase,
+            getPagedFollowedArticlesUseCase,
+            getFollowedCategoriesUseCase,
+            checkAuthSessionUseCase
         )
     }
 

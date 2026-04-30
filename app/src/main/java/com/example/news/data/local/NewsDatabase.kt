@@ -18,8 +18,8 @@ import androidx.room.RoomDatabase
  * [Migration] objects to preserve user data across upgrades.
  */
 @Database(
-    entities = [ArticleEntity::class, BookmarkEntity::class],
-    version = 2,
+    entities = [ArticleEntity::class, BookmarkEntity::class, FollowedCategoryEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class NewsDatabase : RoomDatabase() {
@@ -29,5 +29,8 @@ abstract class NewsDatabase : RoomDatabase() {
 
     /** Provides access to bookmark CRUD, observation, and paged queries. */
     abstract fun bookmarkDao(): BookmarkDao
+
+    /** Provides access to followed-category CRUD and observation. */
+    abstract fun followedCategoryDao(): FollowedCategoryDao
 }
 

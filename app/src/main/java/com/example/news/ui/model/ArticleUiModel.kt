@@ -25,6 +25,7 @@ data class ArticleUiModel(
     val publishedDate: Long,
     val imageUrl: String?,
     val articleUrl: String,
-    val isBookmarked: Boolean = false
+    val isBookmarked: Boolean = false,
+    val category: String = ""
 )
 

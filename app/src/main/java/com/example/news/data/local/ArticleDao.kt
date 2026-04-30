@@ -105,5 +105,26 @@ interface ArticleDao {
      */
     @Query("SELECT * FROM articles WHERE articleId = :articleId")
     suspend fun getArticleById(articleId: String): ArticleEntity?
+
+    /**
+     * Get paged articles whose category is in [categories], ordered by publishedAt descending.
+     * Used by the "Followed" feed to aggregate articles across all followed categories.
+     * Room safely expands [categories] into a SQL IN clause at compile time.
+     */
+    @Query("""
+        SELECT * FROM articles
+        WHERE category IN (:categories)
+        AND (
+            :searchQuery = '' OR
+            title LIKE '%' || :searchQuery || '%' OR
+            author LIKE '%' || :searchQuery || '%' OR
+            sourceName LIKE '%' || :searchQuery || '%'
+        )
+        ORDER BY publishedAt DESC
+    """)
+    fun getPagedArticlesByFollowedCategories(
+        categories: List<String>,
+        searchQuery: String
+    ): PagingSource<Int, ArticleEntity>
 }
 

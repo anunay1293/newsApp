@@ -71,13 +71,19 @@ sealed class Screen(val route: String, @StringRes val titleRes: Int) {
      * bar is hidden while this flow is active. When authentication succeeds the destination
      * is automatically popped, returning the user to the Settings tab.
      */
-    object SignInFlow : Screen("sign_in_flow?pendingBookmarkId={pendingBookmarkId}", 0) {
-        fun createRoute(pendingBookmarkId: String? = null): String {
-            return if (pendingBookmarkId != null) {
-                "sign_in_flow?pendingBookmarkId=$pendingBookmarkId"
-            } else {
-                "sign_in_flow"
+    object SignInFlow : Screen(
+        "sign_in_flow?pendingBookmarkId={pendingBookmarkId}&pendingFollowCategoryId={pendingFollowCategoryId}",
+        0
+    ) {
+        fun createRoute(
+            pendingBookmarkId: String? = null,
+            pendingFollowCategoryId: String? = null
+        ): String {
+            val params = buildList {
+                if (pendingBookmarkId != null) add("pendingBookmarkId=$pendingBookmarkId")
+                if (pendingFollowCategoryId != null) add("pendingFollowCategoryId=$pendingFollowCategoryId")
             }
+            return if (params.isEmpty()) "sign_in_flow" else "sign_in_flow?${params.joinToString("&")}"
         }
     }
 }
@@ -162,17 +168,27 @@ fun NewsNavigation() {
                 val pendingBookmarkId by backStackEntry.savedStateHandle
                     .getStateFlow<String?>("pendingBookmarkId", null)
                     .collectAsState()
+                val pendingFollowCategoryId by backStackEntry.savedStateHandle
+                    .getStateFlow<String?>("pendingFollowCategoryId", null)
+                    .collectAsState()
 
                 HomeScreen(
                     onArticleClick = { articleId ->
                         navController.navigate(Screen.ArticleDetail.createRoute(articleId))
                     },
                     onSignInRequired = { articleId ->
-                        navController.navigate(Screen.SignInFlow.createRoute(articleId))
+                        navController.navigate(Screen.SignInFlow.createRoute(pendingBookmarkId = articleId))
                     },
                     pendingBookmarkArticleId = pendingBookmarkId,
                     onPendingBookmarkConsumed = {
                         backStackEntry.savedStateHandle.remove<String>("pendingBookmarkId")
+                    },
+                    onFollowSignInRequired = { categoryId ->
+                        navController.navigate(Screen.SignInFlow.createRoute(pendingFollowCategoryId = categoryId))
+                    },
+                    pendingFollowCategoryId = pendingFollowCategoryId,
+                    onPendingFollowCategoryConsumed = {
+                        backStackEntry.savedStateHandle.remove<String>("pendingFollowCategoryId")
                     }
                 )
             }
@@ -202,15 +218,25 @@ fun NewsNavigation() {
                 val pendingBookmarkId by backStackEntry.savedStateHandle
                     .getStateFlow<String?>("pendingBookmarkId", null)
                     .collectAsState()
+                val pendingFollowCategoryId by backStackEntry.savedStateHandle
+                    .getStateFlow<String?>("pendingFollowCategoryId", null)
+                    .collectAsState()
 
                 ArticleDetailScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onSignInRequired = { articleId ->
-                        navController.navigate(Screen.SignInFlow.createRoute(articleId))
+                        navController.navigate(Screen.SignInFlow.createRoute(pendingBookmarkId = articleId))
                     },
                     pendingBookmarkArticleId = pendingBookmarkId,
                     onPendingBookmarkConsumed = {
                         backStackEntry.savedStateHandle.remove<String>("pendingBookmarkId")
+                    },
+                    onFollowSignInRequired = { categoryId ->
+                        navController.navigate(Screen.SignInFlow.createRoute(pendingFollowCategoryId = categoryId))
+                    },
+                    pendingFollowCategoryId = pendingFollowCategoryId,
+                    onPendingFollowCategoryConsumed = {
+                        backStackEntry.savedStateHandle.remove<String>("pendingFollowCategoryId")
                     }
                 )
             }
@@ -221,15 +247,24 @@ fun NewsNavigation() {
                         type = NavType.StringType
                         nullable = true
                         defaultValue = null
+                    },
+                    navArgument("pendingFollowCategoryId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
                     }
                 )
             ) { backStackEntry ->
                 val pendingBookmarkId = backStackEntry.arguments?.getString("pendingBookmarkId")
+                val pendingFollowCategoryId = backStackEntry.arguments?.getString("pendingFollowCategoryId")
 
                 AuthNavigation(onAuthSuccess = {
+                    val prevHandle = navController.previousBackStackEntry?.savedStateHandle
                     if (pendingBookmarkId != null) {
-                        navController.previousBackStackEntry?.savedStateHandle
-                            ?.set("pendingBookmarkId", pendingBookmarkId)
+                        prevHandle?.set("pendingBookmarkId", pendingBookmarkId)
+                    }
+                    if (pendingFollowCategoryId != null) {
+                        prevHandle?.set("pendingFollowCategoryId", pendingFollowCategoryId)
                     }
                     navController.popBackStack()
                 })

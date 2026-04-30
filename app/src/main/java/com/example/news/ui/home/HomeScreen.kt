@@ -16,20 +16,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -74,19 +79,25 @@ private val NEWS_CATEGORIES = listOf(
     "entertainment"
 )
 
+private const val FOLLOWED_CATEGORY = HomeViewModel.FOLLOWED_CATEGORY
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onArticleClick: (String) -> Unit,
     onSignInRequired: (String) -> Unit = {},
+    onFollowSignInRequired: (String) -> Unit = {},
     pendingBookmarkArticleId: String? = null,
-    onPendingBookmarkConsumed: () -> Unit = {}
+    onPendingBookmarkConsumed: () -> Unit = {},
+    pendingFollowCategoryId: String? = null,
+    onPendingFollowCategoryConsumed: () -> Unit = {}
 ) {
     val viewModel: HomeViewModel = hiltViewModel()
     val events: HomeScreenEvents = viewModel
     val uiState by viewModel.uiState.collectAsState()
     val pagedArticles = viewModel.pagedArticles.collectAsLazyPagingItems()
     var isDropdownExpanded by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
         viewModel.authRequiredForBookmark.collect { articleId ->
@@ -94,10 +105,32 @@ fun HomeScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.authRequiredForFollowCategory.collect { categoryId ->
+            onFollowSignInRequired(categoryId)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.followSnackbarMessage.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
     LaunchedEffect(pendingBookmarkArticleId) {
         val id = pendingBookmarkArticleId ?: return@LaunchedEffect
         events.onBookmarkToggle(id, false)
         onPendingBookmarkConsumed()
+    }
+
+    LaunchedEffect(pendingFollowCategoryId) {
+        val id = pendingFollowCategoryId ?: return@LaunchedEffect
+        if (id == FOLLOWED_CATEGORY) {
+            events.onCategorySelected(FOLLOWED_CATEGORY)
+        } else {
+            events.onFollowCategoryToggle(id, false)
+        }
+        onPendingFollowCategoryConsumed()
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
@@ -131,6 +164,7 @@ fun HomeScreen(
                     scrollBehavior = scrollBehavior
                 )
             },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = MaterialTheme.colorScheme.background
         ) { innerPadding ->
             Box(
@@ -138,7 +172,12 @@ fun HomeScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                if (uiState.errorMessage != null && pagedArticles.itemCount == 0) {
+                if (uiState.selectedCategory == FOLLOWED_CATEGORY
+                    && pagedArticles.itemCount == 0
+                    && pagedArticles.loadState.refresh is LoadState.NotLoading
+                ) {
+                    HomeFollowedEmptySection()
+                } else if (uiState.errorMessage != null && pagedArticles.itemCount == 0) {
                     HomeErrorSection(
                         errorMessage = uiState.errorMessage ?: stringResource(R.string.error_unknown),
                         events = events
@@ -238,20 +277,52 @@ private fun HomeCollapsibleHeader(
     ) {
         Layout(
             content = {
-                Column(
+                // Pinned section — always visible
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp)
-                        .padding(top = 24.dp, bottom = 12.dp)
+                        .padding(top = 24.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = stringResource(R.string.home_title),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f)
                     )
+                    if (uiState.selectedCategory != FOLLOWED_CATEGORY) {
+                        IconButton(
+                            onClick = {
+                                events.onFollowCategoryToggle(
+                                    uiState.selectedCategory,
+                                    uiState.isCurrentCategoryFollowed
+                                )
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.isCurrentCategoryFollowed) {
+                                    Icons.Default.Done
+                                } else {
+                                    Icons.Default.Add
+                                },
+                                contentDescription = if (uiState.isCurrentCategoryFollowed) {
+                                    stringResource(R.string.cd_unfollow_category)
+                                } else {
+                                    stringResource(R.string.cd_follow_category)
+                                },
+                                tint = if (uiState.isCurrentCategoryFollowed) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                }
+                            )
+                        }
+                    }
                 }
 
+                // Collapsible section
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -280,7 +351,11 @@ private fun HomeCollapsibleHeader(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                text = uiState.selectedCategory.replaceFirstChar { it.uppercase() },
+                                text = if (uiState.selectedCategory == FOLLOWED_CATEGORY) {
+                                    stringResource(R.string.category_followed)
+                                } else {
+                                    uiState.selectedCategory.replaceFirstChar { it.uppercase() }
+                                },
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.weight(1f)
                             )
@@ -295,6 +370,20 @@ private fun HomeCollapsibleHeader(
                             onDismissRequest = { onDropdownExpandedChange(false) },
                             modifier = Modifier.widthIn(min = 200.dp)
                         ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = stringResource(R.string.category_followed),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = {
+                                    events.onCategorySelected(FOLLOWED_CATEGORY)
+                                    onDropdownExpandedChange(false)
+                                }
+                            )
+                            HorizontalDivider()
                             NEWS_CATEGORIES.forEach { category ->
                                 DropdownMenuItem(
                                     text = {

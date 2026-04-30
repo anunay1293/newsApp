@@ -22,5 +22,6 @@ import com.example.news.domain.model.Article
 data class ArticleDetailUiState(
     val article: Article? = null,
     val isLoading: Boolean = true,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isCategoryFollowed: Boolean = false
 )
