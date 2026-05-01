@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -162,7 +163,7 @@ fun NewsNavigation() {
         NavHost(
             navController = navController,
             startDestination = Screen.Feed.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding)
         ) {
             composable(Screen.Feed.route) { backStackEntry ->
                 val pendingBookmarkId by backStackEntry.savedStateHandle
