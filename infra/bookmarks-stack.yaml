@@ -11,6 +11,18 @@ Parameters:
 
 Resources:
 
+  ArticleSummariesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: newsapp-article-summaries
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: articleId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: articleId
+          KeyType: HASH
+
   BookmarksTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -71,6 +83,11 @@ Resources:
                   - dynamodb:DeleteItem
                   - dynamodb:Query
                 Resource: !GetAtt FollowedCategoriesTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: !GetAtt ArticleSummariesTable.Arn
 
   GetBookmarksFunction:
     Type: AWS::Lambda::Function
@@ -442,6 +459,128 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BookmarkApi}/*/*/bookmarks/*
 
+  GetArticleSummaryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: newsapp-getArticleSummary
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 29
+      Environment:
+        Variables:
+          SUMMARIES_TABLE_NAME: !Ref ArticleSummariesTable
+          OPENAI_API_KEY: REPLACE_WITH_YOUR_KEY
+      Code:
+        ZipFile: |
+          const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+          const { GetCommand, PutCommand, DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+          const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+          exports.handler = async (event) => {
+            const { articleId, articleUrl } = event.queryStringParameters || {};
+            if (!articleId || !articleUrl) {
+              return { statusCode: 400, body: JSON.stringify({ error: "Missing articleId or articleUrl" }) };
+            }
+
+            try {
+              const cached = await db.send(new GetCommand({
+                TableName: process.env.SUMMARIES_TABLE_NAME,
+                Key: { articleId }
+              }));
+              if (cached.Item?.summaryPoints) {
+                return { statusCode: 200, body: JSON.stringify({ articleId, summaryPoints: cached.Item.summaryPoints }) };
+              }
+
+              let articleText = "";
+              try {
+                const res = await fetch(articleUrl, {
+                  headers: { "User-Agent": "Mozilla/5.0 (compatible; NewsApp/1.0)" },
+                  signal: AbortSignal.timeout(8000)
+                });
+                const html = await res.text();
+                articleText = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000);
+              } catch (fetchErr) {
+                console.warn("Article fetch failed:", fetchErr.message);
+              }
+
+              const prompt = articleText.length > 100
+                ? articleText
+                : `Article URL: ${articleUrl}`;
+
+              const openAiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                  model: "gpt-4o-mini",
+                  max_tokens: 300,
+                  temperature: 0.3,
+                  messages: [
+                    {
+                      role: "system",
+                      content: "Summarize the following news article in exactly 3 concise bullet points. Return only a JSON array of 3 strings. No markdown, no extra text."
+                    },
+                    { role: "user", content: prompt }
+                  ]
+                }),
+                signal: AbortSignal.timeout(20000)
+              });
+
+              const aiData = await openAiRes.json();
+              const raw = aiData.choices?.[0]?.message?.content ?? "";
+
+              let summaryPoints;
+              try {
+                const parsed = JSON.parse(raw);
+                summaryPoints = Array.isArray(parsed) ? parsed.slice(0, 3) : [raw];
+              } catch {
+                summaryPoints = raw.split("\n").map(l => l.replace(/^[-•*\d.]+\s*/, "").trim()).filter(Boolean).slice(0, 3);
+              }
+
+              if (summaryPoints.length === 0) {
+                return { statusCode: 500, body: JSON.stringify({ error: "Failed to generate summary" }) };
+              }
+
+              await db.send(new PutCommand({
+                TableName: process.env.SUMMARIES_TABLE_NAME,
+                Item: { articleId, summaryPoints, generatedAt: Date.now() }
+              }));
+
+              return { statusCode: 200, body: JSON.stringify({ articleId, summaryPoints }) };
+            } catch (err) {
+              console.error("Summary generation error:", err);
+              return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+            }
+          };
+
+  GetArticleSummaryIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BookmarkApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetArticleSummaryFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+
+  GetArticleSummaryRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BookmarkApi
+      RouteKey: GET /article-summary
+      AuthorizationType: NONE
+      Target: !Sub integrations/${GetArticleSummaryIntegration}
+
+  GetArticleSummaryPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetArticleSummaryFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BookmarkApi}/*/*/article-summary
+
 Outputs:
   BookmarkApiUrl:
     Description: Base URL for the bookmark API
@@ -452,3 +591,6 @@ Outputs:
   FollowedCategoriesTableName:
     Description: DynamoDB followed categories table name
     Value: !Ref FollowedCategoriesTable
+  ArticleSummariesTableName:
+    Description: DynamoDB article summaries table name
+    Value: !Ref ArticleSummariesTable

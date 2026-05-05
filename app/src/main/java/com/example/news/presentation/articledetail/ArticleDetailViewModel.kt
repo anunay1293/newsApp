@@ -5,10 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.example.news.domain.model.BookmarkToggleResult
+import com.example.news.presentation.articledetail.ArticleSummaryState
 import com.example.news.domain.model.CategoryFollowResult
 import com.example.news.domain.usecase.AuthAwareToggleBookmarkUseCase
 import com.example.news.domain.usecase.AuthAwareToggleFollowCategoryUseCase
 import com.example.news.domain.usecase.GetArticleByIdUseCase
+import com.example.news.domain.usecase.GetArticleSummaryUseCase
 import com.example.news.domain.usecase.GetFollowedCategoriesUseCase
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -25,7 +27,8 @@ class ArticleDetailViewModel @Inject constructor(
     private val getArticleByIdUseCase: GetArticleByIdUseCase,
     private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase,
     private val authAwareToggleFollowCategoryUseCase: AuthAwareToggleFollowCategoryUseCase,
-    private val getFollowedCategoriesUseCase: GetFollowedCategoriesUseCase
+    private val getFollowedCategoriesUseCase: GetFollowedCategoriesUseCase,
+    private val getArticleSummaryUseCase: GetArticleSummaryUseCase
 ) : ViewModel(), ArticleDetailScreenEvents {
 
     private val articleId: String = checkNotNull(savedStateHandle["articleId"])
@@ -62,6 +65,7 @@ class ArticleDetailViewModel @Inject constructor(
                 if (article != null) {
                     _uiState.value = ArticleDetailUiState(article = article, isLoading = false)
                     observeFollowedCategories(article.category)
+                    fetchSummary(article.id, article.articleUrl, article.title)
                 } else {
                     _uiState.value = ArticleDetailUiState(
                         isLoading = false,
@@ -84,6 +88,19 @@ class ArticleDetailViewModel @Inject constructor(
                     isCategoryFollowed = followed.contains(articleCategory)
                 )
             }
+        }
+    }
+
+    private fun fetchSummary(articleId: String, articleUrl: String, title: String) {
+        _uiState.value = _uiState.value.copy(summaryState = ArticleSummaryState.Loading)
+        viewModelScope.launch {
+            getArticleSummaryUseCase(articleId, articleUrl, title)
+                .onSuccess { points ->
+                    _uiState.value = _uiState.value.copy(summaryState = ArticleSummaryState.Success(points))
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(summaryState = ArticleSummaryState.Error)
+                }
         }
     }
 

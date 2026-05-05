@@ -1,0 +1,188 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AI article summary infrastructure -- DynamoDB table, Lambda, and public API route
+
+Parameters:
+  BookmarkApiId:
+    Type: String
+    Default: ehztnmpmg4
+    Description: The existing BookmarkApi Gateway ID (from the base URL)
+  OpenAiApiKey:
+    Type: String
+    Default: REPLACE_WITH_YOUR_KEY
+    NoEcho: true
+
+Resources:
+
+  ArticleSummariesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: newsapp-article-summaries
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: articleId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: articleId
+          KeyType: HASH
+
+  SummaryLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: newsapp-summary-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBSummaryAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: !GetAtt ArticleSummariesTable.Arn
+
+  GetArticleSummaryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: newsapp-getArticleSummary
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt SummaryLambdaRole.Arn
+      Timeout: 29
+      Environment:
+        Variables:
+          SUMMARIES_TABLE_NAME: !Ref ArticleSummariesTable
+          OPENAI_API_KEY: !Ref OpenAiApiKey
+      Code:
+        ZipFile: |
+          const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+          const { GetCommand, PutCommand, DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+          const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+          exports.handler = async (event) => {
+            const { articleId, articleUrl, title = "" } = event.queryStringParameters || {};
+            if (!articleId || !articleUrl) {
+              return { statusCode: 400, body: JSON.stringify({ error: "Missing articleId or articleUrl" }) };
+            }
+
+            try {
+              const cached = await db.send(new GetCommand({
+                TableName: process.env.SUMMARIES_TABLE_NAME,
+                Key: { articleId }
+              }));
+              if (cached.Item?.summaryPoints) {
+                return { statusCode: 200, body: JSON.stringify({ articleId, summaryPoints: cached.Item.summaryPoints }) };
+              }
+
+              let articleText = "";
+              try {
+                const res = await fetch(articleUrl, {
+                  headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5"
+                  },
+                  signal: AbortSignal.timeout(5000)
+                });
+                const html = await res.text();
+                articleText = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000);
+              } catch (fetchErr) {
+                console.warn("Article fetch failed:", fetchErr.message);
+              }
+
+              // Always anchor the prompt with the title so the summary stays on-topic.
+              // When we have article text, include it as supporting content.
+              // When fetch fails, the title alone is enough for gpt-4o-mini to produce accurate bullet points.
+              const hasContent = articleText.length > 200;
+              const userPrompt = hasContent
+                ? `Headline: ${title}\n\nArticle content:\n${articleText}`
+                : `Headline: ${title}`;
+              const systemPrompt = hasContent
+                ? "You are a news summarizer. Summarize the following news article in exactly 3 concise bullet points that are directly relevant to the headline. Return only a JSON array of 3 strings. No markdown, no extra text."
+                : "You are a news summarizer. Based on this news headline, write 3 concise bullet points summarizing what this article covers. Stay strictly on-topic with the headline. Return only a JSON array of 3 strings. No markdown, no extra text.";
+
+              const openAiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                  model: "gpt-4o-mini",
+                  max_tokens: 300,
+                  temperature: 0.3,
+                  messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                  ]
+                }),
+                signal: AbortSignal.timeout(20000)
+              });
+
+              const aiData = await openAiRes.json();
+              const raw = aiData.choices?.[0]?.message?.content ?? "";
+
+              let summaryPoints;
+              try {
+                const parsed = JSON.parse(raw);
+                summaryPoints = Array.isArray(parsed) ? parsed.slice(0, 3) : [raw];
+              } catch {
+                summaryPoints = raw.split("\n").map(l => l.replace(/^[-•*\d.]+\s*/, "").trim()).filter(Boolean).slice(0, 3);
+              }
+
+              if (summaryPoints.length === 0) {
+                return { statusCode: 500, body: JSON.stringify({ error: "Failed to generate summary" }) };
+              }
+
+              await db.send(new PutCommand({
+                TableName: process.env.SUMMARIES_TABLE_NAME,
+                Item: { articleId, summaryPoints, generatedAt: Date.now() }
+              }));
+
+              return { statusCode: 200, body: JSON.stringify({ articleId, summaryPoints }) };
+            } catch (err) {
+              console.error("Summary generation error:", err);
+              return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+            }
+          };
+
+  GetArticleSummaryIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BookmarkApiId
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetArticleSummaryFunction.Arn
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+
+  GetArticleSummaryRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BookmarkApiId
+      RouteKey: GET /article-summary
+      AuthorizationType: NONE
+      Target: !Sub integrations/${GetArticleSummaryIntegration}
+
+  GetArticleSummaryPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetArticleSummaryFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BookmarkApiId}/*/*/article-summary
+
+Outputs:
+  SummaryApiUrl:
+    Description: Public endpoint for AI article summaries
+    Value: !Sub https://${BookmarkApiId}.execute-api.${AWS::Region}.amazonaws.com/article-summary
+  ArticleSummariesTableName:
+    Description: DynamoDB article summaries table
+    Value: !Ref ArticleSummariesTable

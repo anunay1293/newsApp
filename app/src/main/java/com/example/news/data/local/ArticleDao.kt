@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -49,9 +50,25 @@ interface ArticleDao {
     
     /**
      * Upsert articles (insert or update if exists).
+     * NOTE: Uses REPLACE — SQLite deletes the conflicting row first, which fires ON DELETE CASCADE
+     * and wipes any child-table rows (e.g. bookmarks). Use only in callers that explicitly manage
+     * the bookmarks table themselves (e.g. [NewsRepositoryImpl.syncBookmarksFromRemote]).
+     * For feed refreshes use [insertOrIgnoreArticles] + [updateArticles] instead.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertArticles(articles: List<ArticleEntity>)
+
+    /** Insert articles; silently ignore conflicts. No DELETE → no ON DELETE CASCADE. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertOrIgnoreArticles(articles: List<ArticleEntity>)
+
+    /**
+     * Update articles that already exist (matched by primary key).
+     * Generates UPDATE statements — no row deletion, so CASCADE never fires.
+     * Rows whose primary key is not found are silently skipped.
+     */
+    @Update
+    suspend fun updateArticles(articles: List<ArticleEntity>)
     
     /**
      * Get article IDs to keep for a category (most recent N items).

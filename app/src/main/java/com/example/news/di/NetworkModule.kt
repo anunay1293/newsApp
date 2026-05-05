@@ -1,5 +1,6 @@
 package com.example.news.di
 
+import com.example.news.data.api.ArticleSummaryApiService
 import com.example.news.data.api.BookmarkApiService
 import com.example.news.data.api.CognitoAuthInterceptor
 import com.example.news.data.api.FollowedCategoryApiService
@@ -14,6 +15,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
@@ -93,5 +95,22 @@ object NetworkModule {
     @Singleton
     fun provideFollowedCategoryApiService(@Authenticated retrofit: Retrofit): FollowedCategoryApiService {
         return retrofit.create(FollowedCategoryApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @Named("summaryRetrofit")
+    fun provideSummaryRetrofit(okHttpClient: OkHttpClient): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl(BOOKMARK_API_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideArticleSummaryApiService(@Named("summaryRetrofit") retrofit: Retrofit): ArticleSummaryApiService {
+        return retrofit.create(ArticleSummaryApiService::class.java)
     }
 }

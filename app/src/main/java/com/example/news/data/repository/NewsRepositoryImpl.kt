@@ -26,6 +26,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -165,7 +166,10 @@ class NewsRepositoryImpl @Inject constructor(
                 articleDto.toEntity(category = category)
             }
             
-            articleDao.upsertArticles(entities)
+            // Safe upsert: INSERT IGNORE + UPDATE avoids SQLite's REPLACE delete step,
+            // which would otherwise fire ON DELETE CASCADE and wipe bookmark rows.
+            articleDao.insertOrIgnoreArticles(entities)
+            articleDao.updateArticles(entities)
             articleDao.deleteOldNonBookmarkedArticles(category, keepLimit = 100)
             
         } catch (e: Exception) {
@@ -332,7 +336,9 @@ class NewsRepositoryImpl @Inject constructor(
     }
 
     override fun getPagedFollowedArticles(searchQuery: String): Flow<PagingData<Article>> {
-        return followedCategoriesFromRoom.flatMapLatest { categories ->
+        return combine(followedCategoriesFromRoom, _bookmarkedIds) { categories, bookmarkedSet ->
+            Pair(categories, bookmarkedSet)
+        }.flatMapLatest { (categories, bookmarkedSet) ->
             if (categories.isEmpty()) {
                 flowOf(PagingData.empty())
             } else {
@@ -348,7 +354,7 @@ class NewsRepositoryImpl @Inject constructor(
                     pagingSourceFactory = pagingSourceFactory
                 ).flow.map { pagingData ->
                     pagingData.map { entity ->
-                        entity.toDomain(isBookmarked = _bookmarkedIds.value.contains(entity.articleId))
+                        entity.toDomain(isBookmarked = bookmarkedSet.contains(entity.articleId))
                     }
                 }
             }

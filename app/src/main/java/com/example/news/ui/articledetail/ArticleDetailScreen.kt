@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import com.example.news.presentation.articledetail.ArticleSummaryState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -111,10 +113,13 @@ fun ArticleDetailScreen(
                 }
 
                 article != null -> {
-                    ArticleWebView(
-                        url = article.articleUrl,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        ArticleSummarySection(summaryState = uiState.summaryState)
+                        ArticleWebView(
+                            url = article.articleUrl,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
@@ -129,20 +134,7 @@ private fun ArticleWebView(
 ) {
     var pageLoadProgress by remember { mutableIntStateOf(0) }
 
-    Column(modifier = modifier) {
-        AnimatedVisibility(
-            visible = pageLoadProgress in 1..99,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            LinearProgressIndicator(
-                progress = { pageLoadProgress / 100f },
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        }
-
+    Box(modifier = modifier) {
         AndroidView(
             factory = { context ->
                 WebView(context).apply {
@@ -159,9 +151,20 @@ private fun ArticleWebView(
                     loadUrl(url)
                 }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
+            modifier = Modifier.fillMaxSize()
         )
+        AnimatedVisibility(
+            visible = pageLoadProgress in 1..99,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            LinearProgressIndicator(
+                progress = { pageLoadProgress / 100f },
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        }
     }
 }
