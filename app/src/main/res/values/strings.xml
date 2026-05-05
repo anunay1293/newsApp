@@ -16,7 +16,7 @@
     <string name="error_loading_more">Error loading more: %1$s</string>
     <string name="empty_no_articles">No articles found</string>
     <string name="empty_adjust_search">Try adjusting your search terms</string>
-    <string name="empty_check_later">Check back later for updates</string>
+    <string name="empty_check_later">Check back later for updates!</string>
     <string name="loading_articles">Loading articles…</string>
     <string name="refreshing">Refreshing…</string>
     <string name="pull_to_refresh">Pull to refresh</string>
