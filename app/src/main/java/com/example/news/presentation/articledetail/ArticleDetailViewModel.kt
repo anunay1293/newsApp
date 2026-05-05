@@ -5,8 +5,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.example.news.domain.model.BookmarkToggleResult
+import com.example.news.presentation.articledetail.ArticleSummaryState
+import com.example.news.domain.model.CategoryFollowResult
 import com.example.news.domain.usecase.AuthAwareToggleBookmarkUseCase
+import com.example.news.domain.usecase.AuthAwareToggleFollowCategoryUseCase
 import com.example.news.domain.usecase.GetArticleByIdUseCase
+import com.example.news.domain.usecase.GetArticleSummaryUseCase
+import com.example.news.domain.usecase.GetFollowedCategoriesUseCase
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,24 +21,15 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * ViewModel for the article detail screen.
- *
- * Loads a single article from the local Room database using the `articleId` navigation
- * argument (injected via [SavedStateHandle]) and exposes it as observable UI state.
- * The user can toggle the article's bookmark status; the change is applied optimistically
- * in the UI state for instant feedback while the repository persists it to Room.
- *
- * @param savedStateHandle  Handle providing navigation arguments; must contain "articleId".
- * @param getArticleByIdUseCase Use case for fetching a single article by its ID.
- * @param toggleBookmarkUseCase Use case for toggling an article's bookmark state.
- */
 @HiltViewModel
 class ArticleDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getArticleByIdUseCase: GetArticleByIdUseCase,
-    private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase
-) : ViewModel() {
+    private val authAwareToggleBookmarkUseCase: AuthAwareToggleBookmarkUseCase,
+    private val authAwareToggleFollowCategoryUseCase: AuthAwareToggleFollowCategoryUseCase,
+    private val getFollowedCategoriesUseCase: GetFollowedCategoriesUseCase,
+    private val getArticleSummaryUseCase: GetArticleSummaryUseCase
+) : ViewModel(), ArticleDetailScreenEvents {
 
     private val articleId: String = checkNotNull(savedStateHandle["articleId"])
 
@@ -42,39 +38,34 @@ class ArticleDetailViewModel @Inject constructor(
     private val _authRequiredChannel = Channel<String>(Channel.BUFFERED)
     val authRequiredForBookmark: Flow<String> = _authRequiredChannel.receiveAsFlow()
 
-    /** Observable UI state consumed by the article detail screen composable. */
+    private val _authRequiredForFollowChannel = Channel<String>(Channel.BUFFERED)
+    val authRequiredForFollowCategory: Flow<String> = _authRequiredForFollowChannel.receiveAsFlow()
+
+    private val _followSnackbarChannel = Channel<String>(Channel.BUFFERED)
+    val followSnackbarMessage: Flow<String> = _followSnackbarChannel.receiveAsFlow()
+
     val uiState: StateFlow<ArticleDetailUiState> = _uiState.asStateFlow()
 
     init {
         loadArticle()
     }
 
-    /**
-     * Central event handler for all user interactions on the article detail screen.
-     *
-     * Dispatches each [ArticleDetailUiEvent] to the appropriate internal handler,
-     * keeping the composable layer free of business logic.
-     */
-    fun handleEvent(event: ArticleDetailUiEvent) {
-        when (event) {
-            is ArticleDetailUiEvent.OnBookmarkToggle -> toggleBookmark()
-        }
+    override fun onBookmarkToggle() {
+        toggleBookmark()
     }
 
-    /**
-     * Fetches the article from the local database and updates [_uiState].
-     * If the article is not found (e.g., it was pruned from the cache), an error
-     * message is surfaced instead.
-     */
+    override fun onFollowCategoryToggle() {
+        toggleFollowCategory()
+    }
+
     private fun loadArticle() {
         viewModelScope.launch {
             try {
                 val article = getArticleByIdUseCase(articleId)
                 if (article != null) {
-                    _uiState.value = ArticleDetailUiState(
-                        article = article,
-                        isLoading = false
-                    )
+                    _uiState.value = ArticleDetailUiState(article = article, isLoading = false)
+                    observeFollowedCategories(article.category)
+                    fetchSummary(article.id, article.articleUrl, article.title)
                 } else {
                     _uiState.value = ArticleDetailUiState(
                         isLoading = false,
@@ -90,12 +81,29 @@ class ArticleDetailViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Toggles the bookmark state for the current article.
-     *
-     * The UI state is updated **optimistically** (the heart icon flips immediately)
-     * while [ToggleBookmarkUseCase] persists the change to Room in the background.
-     */
+    private fun observeFollowedCategories(articleCategory: String) {
+        viewModelScope.launch {
+            getFollowedCategoriesUseCase().collect { followed ->
+                _uiState.value = _uiState.value.copy(
+                    isCategoryFollowed = followed.contains(articleCategory)
+                )
+            }
+        }
+    }
+
+    private fun fetchSummary(articleId: String, articleUrl: String, title: String) {
+        _uiState.value = _uiState.value.copy(summaryState = ArticleSummaryState.Loading)
+        viewModelScope.launch {
+            getArticleSummaryUseCase(articleId, articleUrl, title)
+                .onSuccess { points ->
+                    _uiState.value = _uiState.value.copy(summaryState = ArticleSummaryState.Success(points))
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(summaryState = ArticleSummaryState.Error)
+                }
+        }
+    }
+
     private fun toggleBookmark() {
         val currentArticle = _uiState.value.article ?: return
         viewModelScope.launch {
@@ -108,6 +116,28 @@ class ArticleDetailViewModel @Inject constructor(
                 }
                 is BookmarkToggleResult.AuthRequired -> {
                     _authRequiredChannel.send(result.articleId)
+                }
+            }
+        }
+    }
+
+    private fun toggleFollowCategory() {
+        val currentArticle = _uiState.value.article ?: return
+        val categoryId = currentArticle.category
+        val isCurrentlyFollowed = _uiState.value.isCategoryFollowed
+        viewModelScope.launch {
+            val result = authAwareToggleFollowCategoryUseCase(categoryId, isCurrentlyFollowed)
+            when (result) {
+                is CategoryFollowResult.Success -> {
+                    val message = if (isCurrentlyFollowed) {
+                        "Unfollowed ${categoryId.replaceFirstChar { it.uppercase() }}"
+                    } else {
+                        "Following ${categoryId.replaceFirstChar { it.uppercase() }}"
+                    }
+                    _followSnackbarChannel.send(message)
+                }
+                is CategoryFollowResult.AuthRequired -> {
+                    _authRequiredForFollowChannel.send(result.categoryId)
                 }
             }
         }

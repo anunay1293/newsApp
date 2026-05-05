@@ -2,29 +2,12 @@ package com.example.news.ui.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,38 +17,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.LocalActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.news.R
 import com.example.news.presentation.auth.AuthUiState
 import com.example.news.presentation.auth.AuthViewModel
+import com.example.news.presentation.auth.SignInScreenEvents
+import com.example.news.ui.components.AuthHeader
+import com.example.news.ui.components.AuthNavigationLink
 
-/**
- * Sign-in screen composable where returning users enter their email and password.
- *
- * Uses the shared [AuthViewModel] (scoped to the Activity via [hiltViewModel]) to invoke
- * [AuthViewModel.signIn]. The screen observes [AuthViewModel.isLoading] and
- * [AuthViewModel.errorMessage] to display a loading spinner on the button and an error
- * banner respectively. A "Don't have an account? Sign Up" link navigates to the sign-up screen.
- *
- * A [LaunchedEffect] watches [AuthViewModel.authState] for two outcomes:
- *
- * - [AuthUiState.SignedIn] -- sign-in succeeded; [onSignInSuccess] is invoked.
- * - [AuthUiState.NeedsConfirmation] -- the account exists but has not been verified;
- *   [onNavigateToConfirm] is invoked with the email so the user can enter the
- *   confirmation code.
- *
- * @param onNavigateToSignUp  Callback invoked when the user taps the "Sign Up" text button,
- *                            triggering navigation to [SignUpScreen].
- * @param onNavigateToConfirm Callback invoked with the user's email when sign-in reveals
- *                            an unconfirmed account, navigating to the confirmation screen.
- * @param onSignInSuccess     Callback invoked when authentication succeeds.
- */
 @Composable
 fun SignInScreen(
     onNavigateToSignUp: () -> Unit,
@@ -74,6 +35,7 @@ fun SignInScreen(
 ) {
     val activity = LocalActivity.current as androidx.activity.ComponentActivity
     val viewModel: AuthViewModel = hiltViewModel(viewModelStoreOwner = activity)
+    val events: SignInScreenEvents = viewModel
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()
@@ -85,7 +47,7 @@ fun SignInScreen(
             is AuthUiState.SignedIn -> onSignInSuccess()
             is AuthUiState.NeedsConfirmation ->
                 onNavigateToConfirm((authState as AuthUiState.NeedsConfirmation).email)
-            else -> { /* SignedOut or CheckingSession -- stay on this screen */ }
+            else -> {}
         }
     }
 
@@ -94,34 +56,11 @@ fun SignInScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header section
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.primaryContainer,
-            tonalElevation = 2.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 48.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = stringResource(R.string.sign_in_title),
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.sign_in_subtitle),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                )
-            }
-        }
+        AuthHeader(
+            titleRes = R.string.sign_in_title,
+            subtitleRes = R.string.sign_in_subtitle
+        )
 
-        // Form section
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -131,119 +70,21 @@ fun SignInScreen(
         ) {
             Spacer(modifier = Modifier.height(32.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = { Text(stringResource(R.string.label_email)) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Email,
-                                contentDescription = stringResource(R.string.cd_email),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isLoading,
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                        )
-                    )
+            SignInFormCard(
+                email = email,
+                onEmailChange = { email = it },
+                password = password,
+                onPasswordChange = { password = it },
+                isLoading = isLoading,
+                errorMessage = errorMessage,
+                events = events
+            )
 
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text(stringResource(R.string.label_password)) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = stringResource(R.string.cd_password),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isLoading,
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                        )
-                    )
-
-                    errorMessage?.let { error ->
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.errorContainer
-                        ) {
-                            Text(
-                                text = error,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(12.dp),
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { viewModel.signIn(email, password) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        enabled = !isLoading && email.isNotBlank() && password.isNotBlank(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text(
-                                stringResource(R.string.action_sign_in),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-            }
-
-            TextButton(
-                onClick = onNavigateToSignUp,
-                modifier = Modifier.padding(top = 8.dp)
-            ) {
-                Text(
-                    stringResource(R.string.sign_in_prompt),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    stringResource(R.string.action_sign_up),
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            AuthNavigationLink(
+                promptRes = R.string.sign_in_prompt,
+                actionRes = R.string.action_sign_up,
+                onClick = onNavigateToSignUp
+            )
         }
     }
 }
-

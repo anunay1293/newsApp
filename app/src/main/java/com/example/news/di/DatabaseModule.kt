@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.news.data.local.ArticleDao
 import com.example.news.data.local.BookmarkDao
+import com.example.news.data.local.FollowedCategoryDao
 import com.example.news.data.local.NewsDatabase
 import dagger.Module
 import dagger.Provides
@@ -39,4 +40,8 @@ object DatabaseModule {
 
     @Provides
     fun provideBookmarkDao(database: NewsDatabase): BookmarkDao = database.bookmarkDao()
+
+    @Provides
+    fun provideFollowedCategoryDao(database: NewsDatabase): FollowedCategoryDao =
+        database.followedCategoryDao()
 }

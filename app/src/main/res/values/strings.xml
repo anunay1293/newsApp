@@ -16,7 +16,7 @@
     <string name="error_loading_more">Error loading more: %1$s</string>
     <string name="empty_no_articles">No articles found</string>
     <string name="empty_adjust_search">Try adjusting your search terms</string>
-    <string name="empty_check_later">Check back later for updates!</string>
+    <string name="empty_check_later">Check back later for updates!!</string>
     <string name="loading_articles">Loading articles…</string>
     <string name="refreshing">Refreshing…</string>
     <string name="pull_to_refresh">Pull to refresh</string>
@@ -77,4 +77,11 @@
     <string name="tab_feed">Feed</string>
     <string name="tab_bookmarks">Bookmarks</string>
     <string name="tab_settings">Settings</string>
+
+    <!-- Follow Category -->
+    <string name="cd_follow_category">Follow category</string>
+    <string name="cd_unfollow_category">Unfollow category</string>
+    <string name="category_followed">Followed</string>
+    <string name="empty_no_followed_categories_title">No followed categories</string>
+    <string name="empty_no_followed_categories_body">Tap \'+\' next to a category to follow it</string>
 </resources>

@@ -25,6 +25,8 @@ data class HomeUiState(
     val searchQuery: String = "",
     val isRefreshing: Boolean = false,
     val isPullRefreshing: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val followedCategories: Set<String> = emptySet(),
+    val isCurrentCategoryFollowed: Boolean = false
 )
 
